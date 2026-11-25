@@ -1,0 +1,3261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#7A1C1C" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>KIU Campus Navigator — Kampala International University</title>
+
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          colors: {
+            kiu: {
+              maroon: '#7A1C1C',
+              maroonDark: '#581212',
+              maroonLight: '#9E2A2B',
+              gold: '#D99B26',
+              goldLight: '#F3C65F',
+              slate: '#0F172A',
+              surface: '#F8FAFC',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- MapLibre GL JS (Open-Source 3D Vector Map Engine, zero API key required) -->
+  <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+  <style>
+    /* ==========================================================================
+       KIU CAMPUS NAVIGATOR — MOBILE-FIRST SAFE AREA & TOUCH OPTIMIZATION STYLES
+       ========================================================================== */
+    :root {
+      --kiu-maroon: #7A1C1C;
+      --kiu-maroon-dark: #581212;
+      --kiu-gold: #D99B26;
+      --kiu-slate: #0F172A;
+      --kiu-surface: #F8FAFC;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #0F172A;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      overscroll-behavior: none;
+    }
+
+    /* Hide scrollbars cleanly on horizontal chip rails while keeping scroll */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Custom subtle scrollbar for desktop sidebar & mobile drawer body */
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.35);
+      border-radius: 9999px;
+    }
+
+    /* Full-bleed Map Viewport */
+    #app-shell {
+      position: relative;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    #maplibre-container,
+    #schematic-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    /* Safe-area spacing utilities */
+    .pt-safe {
+      padding-top: max(12px, var(--safe-top));
+    }
+    .pb-safe {
+      padding-bottom: max(12px, var(--safe-bottom));
+    }
+    .top-safe {
+      top: max(12px, var(--safe-top));
+    }
+
+    /* Mobile Bottom Drawer / Sheet with 3 smooth snap states */
+    @media (max-width: 767px) {
+      #control-panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 88dvh;
+        z-index: 30;
+        border-top-left-radius: 24px;
+        border-top-right-radius: 24px;
+        transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: transform;
+        padding-bottom: var(--safe-bottom);
+      }
+
+      #control-panel.sheet-collapsed {
+        transform: translateY(calc(88dvh - 104px - var(--safe-bottom)));
+      }
+
+      #control-panel.sheet-half {
+        transform: translateY(38dvh);
+      }
+
+      #control-panel.sheet-expanded {
+        transform: translateY(0px);
+      }
+
+      #control-panel.sheet-dragging {
+        transition: none !important;
+      }
+    }
+
+    /* Desktop / Tablet Left Floating Sidebar */
+    @media (min-width: 768px) {
+      #control-panel {
+        position: fixed;
+        top: max(16px, var(--safe-top));
+        left: max(16px, var(--safe-left));
+        bottom: max(16px, var(--safe-bottom));
+        width: 410px;
+        z-index: 30;
+        border-radius: 22px;
+        transform: none !important;
+      }
+    }
+
+    /* MapLibre Custom Building & User Markers */
+    .kiu-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.2s ease;
+    }
+    .kiu-marker:hover {
+      transform: translateY(-2px) scale(1.04);
+    }
+    .kiu-marker-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffffff;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1.5px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+      white-space: nowrap;
+    }
+    .kiu-marker.is-selected .kiu-marker-pill {
+      background: #7A1C1C;
+      border-color: #D99B26;
+      box-shadow: 0 0 0 4px rgba(217, 155, 38, 0.35), 0 6px 16px rgba(122, 28, 28, 0.45);
+    }
+    .kiu-marker-stem {
+      width: 2px;
+      height: 8px;
+      background: #0F172A;
+    }
+    .kiu-marker.is-selected .kiu-marker-stem {
+      background: #7A1C1C;
+    }
+
+    /* Live User GPS / Walker Pulse */
+    .user-puck {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: #2563EB;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.28), 0 3px 10px rgba(0, 0, 0, 0.35);
+      position: relative;
+    }
+    .user-puck::after {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 9999px;
+      border: 2px solid rgba(37, 99, 235, 0.55);
+      animation: pulseRing 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+
+    @keyframes pulseRing {
+      0% { transform: scale(0.75); opacity: 0.9; }
+      100% { transform: scale(1.65); opacity: 0; }
+    }
+
+    /* QR Scanner Laser Line Animation */
+    @keyframes scanLaser {
+      0%, 100% { top: 14%; }
+      50% { top: 82%; }
+    }
+    .qr-laser {
+      position: absolute;
+      left: 10%;
+      right: 10%;
+      height: 2.5px;
+      background: linear-gradient(90deg, transparent, #D99B26, #FDE047, #D99B26, transparent);
+      box-shadow: 0 0 10px #D99B26;
+      animation: scanLaser 2.2s ease-in-out infinite;
+    }
+
+    /* Hide default MapLibre attribution clutter on tiny mobile screens while keeping clean info */
+    .maplibregl-ctrl-bottom-right {
+      margin-bottom: 108px !important;
+    }
+    @media (min-width: 768px) {
+      .maplibregl-ctrl-bottom-right {
+        margin-bottom: 12px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app-shell">
+
+    <!-- ======================================================================
+         1. DUAL-LAYER INTERACTIVE CAMPUS MAP VIEWPORT
+         ====================================================================== -->
+    <!-- Layer A: MapLibre GL JS 3D Vector Extrusion Map -->
+    <div id="maplibre-container" aria-label="KIU 3D Campus Vector Map"></div>
+
+    <!-- Layer B: Built-in Zero-Dependency Offline Interactive Canvas Schematic Map -->
+    <div id="schematic-container" class="hidden" aria-label="KIU Offline Schematic Campus Map">
+      <canvas id="schematic-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+    </div>
+
+    <!-- ======================================================================
+         2. FLOATING TOP MOBILE HEADER & SEARCH BAR (<768px)
+         ====================================================================== -->
+    <header id="mobile-top-bar" class="md:hidden fixed top-0 left-0 right-0 z-20 px-3 pt-safe pointer-events-none">
+      <div class="pointer-events-auto bg-white/95 backdrop-blur-md rounded-2xl shadow-lg border border-slate-200/90 p-2">
+        <div class="flex items-center gap-2">
+          <!-- KIU Crest Badge -->
+          <div class="w-10 h-10 rounded-xl bg-kiu-maroon text-white flex flex-col items-center justify-center shrink-0 shadow-sm border border-kiu-gold/50">
+            <span class="text-[11px] font-extrabold tracking-tight leading-none">KIU</span>
+            <span class="text-[7px] text-kiu-goldLight font-semibold tracking-wider uppercase mt-0.5">NAV</span>
+          </div>
+
+          <!-- Search Input -->
+          <div class="relative flex-1">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.3-4.3"></path>
+            </svg>
+            <input
+              id="mobile-search-input"
+              type="search"
+              placeholder="Search KIU rooms, labs, offices..."
+              autocomplete="off"
+              class="w-full min-h-[44px] pl-9 pr-8 rounded-xl bg-slate-100/90 text-slate-900 placeholder-slate-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-kiu-maroon/40 focus:bg-white transition"
+            />
+            <button
+              id="mobile-clear-search"
+              type="button"
+              aria-label="Clear search"
+              class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold"
+            >✕</button>
+          </div>
+
+          <!-- Quick QR Scan Trigger -->
+          <button
+            type="button"
+            onclick="openQrModal()"
+            aria-label="Scan Campus QR Checkpoint"
+            class="min-w-[44px] min-h-[44px] rounded-xl bg-kiu-maroon text-white flex items-center justify-center shadow-sm active:scale-95 transition"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+              <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+              <rect width="7" height="7" x="7" y="7" rx="1"></rect>
+              <path d="M14 14h3v3h-3z"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Mobile Category Chips Rail -->
+        <div id="mobile-category-chips" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar mt-2 pt-1 border-t border-slate-100">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+
+      <!-- Mobile Floating Quick Map Pills (Right-Aligned below Search) -->
+      <div class="pointer-events-auto flex items-center justify-end gap-1.5 mt-2">
+        <button
+          id="mobile-stepfree-btn"
+          type="button"
+          onclick="toggleStepFree()"
+          class="min-h-[38px] px-3 rounded-full bg-white/95 backdrop-blur shadow-md border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 active:scale-95 transition"
+        >
+          <span class="text-sm">♿</span>
+          <span>Step-Free</span>
+        </button>
+
+        <button
+          id="mobile-mapmode-btn"
+          type="button"
+          onclick="toggleMapEngine()"
+          class="min-h-[38px] px-3 rounded-full bg-white/95 backdrop-blur shadow-md border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 active:scale-95 transition"
+        >
+          <span id="mobile-mapmode-label">Offline Map</span>
+        </button>
+
+        <button
+          id="mobile-darkmode-btn"
+          type="button"
+          onclick="toggleDarkMap()"
+          aria-label="Toggle Dark Map"
+          class="min-w-[38px] min-h-[38px] rounded-full bg-white/95 backdrop-blur shadow-md border border-slate-200 text-slate-700 flex items-center justify-center active:scale-95 transition"
+        >
+          <span id="mobile-darkmode-icon">🌙</span>
+        </button>
+
+        <button
+          type="button"
+          onclick="locateUserGps()"
+          aria-label="Use My GPS"
+          class="min-w-[38px] min-h-[38px] rounded-full bg-blue-600 text-white shadow-md flex items-center justify-center active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ======================================================================
+         3. DESKTOP FLOATING TOP-RIGHT MAP CONTROLS (>=768px)
+         ====================================================================== -->
+    <div class="hidden md:flex fixed top-safe right-4 z-20 items-center gap-2">
+      <!-- Step-Free Accessibility Toggle -->
+      <button
+        id="desktop-stepfree-btn"
+        type="button"
+        onclick="toggleStepFree()"
+        class="min-h-[44px] px-3.5 rounded-xl bg-white/95 backdrop-blur-md shadow-lg border border-slate-200 text-xs font-bold text-slate-800 flex items-center gap-2 hover:bg-slate-50 transition"
+      >
+        <span class="text-base">♿</span>
+        <span>Step-Free / Wheelchair</span>
+        <span id="desktop-stepfree-badge" class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[10px]">OFF</span>
+      </button>
+
+      <!-- Dual Map Layer Switcher -->
+      <div class="bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-slate-200 p-1 flex items-center">
+        <button
+          id="btn-engine-3d"
+          type="button"
+          onclick="setMapEngine('maplibre')"
+          class="min-h-[36px] px-3 rounded-lg text-xs font-bold bg-kiu-maroon text-white transition"
+        >3D Vector Map</button>
+        <button
+          id="btn-engine-schematic"
+          type="button"
+          onclick="setMapEngine('schematic')"
+          class="min-h-[36px] px-3 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition"
+        >Offline Schematic</button>
+      </div>
+
+      <!-- Dark Map Toggle -->
+      <button
+        id="desktop-darkmode-btn"
+        type="button"
+        onclick="toggleDarkMap()"
+        class="min-h-[44px] px-3 rounded-xl bg-white/95 backdrop-blur-md shadow-lg border border-slate-200 text-xs font-bold text-slate-700 flex items-center gap-1.5 hover:bg-slate-50 transition"
+      >
+        <span id="desktop-darkmode-icon">🌙</span>
+        <span id="desktop-darkmode-text">Dark</span>
+      </button>
+
+      <!-- QR Checkpoint Button -->
+      <button
+        type="button"
+        onclick="openQrModal()"
+        class="min-h-[44px] px-3.5 rounded-xl bg-kiu-maroon text-white shadow-lg border border-kiu-gold/40 text-xs font-bold flex items-center gap-2 hover:bg-kiu-maroonDark transition"
+      >
+        <svg class="w-4 h-4 text-kiu-goldLight" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"></path>
+          <rect width="7" height="7" x="7" y="7" rx="1"></rect>
+        </svg>
+        <span>QR Checkpoint</span>
+      </button>
+
+      <!-- Live GPS & Recenter -->
+      <button
+        type="button"
+        onclick="locateUserGps()"
+        class="min-h-[44px] px-3.5 rounded-xl bg-blue-600 text-white shadow-lg text-xs font-bold flex items-center gap-1.5 hover:bg-blue-700 transition"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
+        </svg>
+        <span>My GPS</span>
+      </button>
+
+      <button
+        type="button"
+        onclick="resetMapCamera()"
+        title="Reset Campus View"
+        class="min-w-[44px] min-h-[44px] rounded-xl bg-white/95 backdrop-blur-md shadow-lg border border-slate-200 text-slate-700 flex items-center justify-center hover:bg-slate-50 transition"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <path d="M3 3v5h5"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ======================================================================
+         4. UNIFIED CONTROL PANEL (DESKTOP SIDEBAR + MOBILE 3-STATE DRAWER)
+         ====================================================================== -->
+    <aside
+      id="control-panel"
+      class="sheet-half bg-white/98 backdrop-blur-xl shadow-2xl border border-slate-200/90 flex flex-col overflow-hidden"
+    >
+      <!-- Mobile Drag Handle & Quick Status Strip (<768px) -->
+      <div
+        id="sheet-drag-zone"
+        class="md:hidden pt-2 pb-2 px-4 border-b border-slate-100 bg-white select-none cursor-grab active:cursor-grabbing shrink-0"
+      >
+        <div class="w-11 h-1.5 rounded-full bg-slate-300 mx-auto mb-2"></div>
+        <div class="flex items-center justify-between gap-2">
+          <div id="mobile-sheet-summary" class="min-w-0 flex-1" onclick="cycleSheetState()">
+            <p class="text-xs font-extrabold text-kiu-maroon truncate">KIU Main Campus — Kansanga</p>
+            <p class="text-[11px] text-slate-500 truncate">9 Buildings • 28 Rooms • Offline Ready</p>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onclick="setSheetState('collapsed')"
+              class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-[11px] font-semibold text-slate-600"
+            >Map</button>
+            <button
+              type="button"
+              onclick="setSheetState('half')"
+              class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-[11px] font-semibold text-slate-600"
+            >Panel</button>
+            <button
+              type="button"
+              onclick="setSheetState('expanded')"
+              class="px-2.5 py-1.5 rounded-lg bg-kiu-maroon/10 text-[11px] font-bold text-kiu-maroon"
+            >Full</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop Brand Header & Search (>=768px) -->
+      <div class="hidden md:block p-4 bg-gradient-to-br from-kiu-maroon via-kiu-maroon to-kiu-maroonDark text-white shrink-0">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-2xl bg-white/10 border border-kiu-gold/60 flex flex-col items-center justify-center shadow-inner">
+              <span class="text-sm font-black tracking-tight text-white leading-none">KIU</span>
+              <span class="text-[8px] font-bold text-kiu-goldLight tracking-widest uppercase mt-0.5">GIS</span>
+            </div>
+            <div>
+              <h1 class="text-base font-extrabold tracking-tight leading-tight">KIU Campus Navigator</h1>
+              <p class="text-[11px] text-kiu-goldLight font-medium">Kansanga Main Campus • <em>“Exploring the Heights”</em></p>
+            </div>
+          </div>
+          <span id="offline-status-pill" class="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[10px] font-bold uppercase tracking-wider">
+            Offline Ready
+          </span>
+        </div>
+
+        <!-- Desktop Search Box -->
+        <div class="relative mt-3">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+          <input
+            id="desktop-search-input"
+            type="search"
+            placeholder="Search lecture halls, labs, offices, hostels..."
+            autocomplete="off"
+            class="w-full min-h-[44px] pl-10 pr-9 rounded-xl bg-white text-slate-900 placeholder-slate-400 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-kiu-gold"
+          />
+          <button
+            id="desktop-clear-search"
+            type="button"
+            aria-label="Clear search"
+            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold hover:bg-slate-300"
+          >✕</button>
+        </div>
+
+        <!-- Desktop Category Chips -->
+        <div id="desktop-category-chips" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar mt-2.5">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+
+      <!-- Navigation Tabs Bar -->
+      <nav class="grid grid-cols-5 border-b border-slate-200 bg-slate-50/90 shrink-0" aria-label="Navigator Sections">
+        <button type="button" data-tab="explore" onclick="switchTab('explore')" class="nav-tab min-h-[44px] flex flex-col items-center justify-center text-[11px] font-bold text-kiu-maroon border-b-2 border-kiu-maroon bg-white">
+          <span>Explore</span>
+        </button>
+        <button type="button" data-tab="route" onclick="switchTab('route')" class="nav-tab min-h-[44px] flex flex-col items-center justify-center text-[11px] font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-800">
+          <span>Route</span>
+        </button>
+        <button type="button" data-tab="indoor" onclick="switchTab('indoor')" class="nav-tab min-h-[44px] flex flex-col items-center justify-center text-[11px] font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-800">
+          <span>Floors</span>
+        </button>
+        <button type="button" data-tab="guide" onclick="switchTab('guide')" class="nav-tab min-h-[44px] flex flex-col items-center justify-center text-[11px] font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-800">
+          <span>AI Guide</span>
+        </button>
+        <button type="button" data-tab="saved" onclick="switchTab('saved')" class="nav-tab min-h-[44px] flex flex-col items-center justify-center text-[11px] font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-800">
+          <span>Saved</span>
+        </button>
+      </nav>
+
+      <!-- Active Origin Bar (Always visible for instant context) -->
+      <div class="px-3.5 py-2 bg-slate-100/80 border-b border-slate-200/80 flex items-center justify-between gap-2 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="w-2.5 h-2.5 rounded-full bg-blue-600 ring-4 ring-blue-600/20 shrink-0"></span>
+          <div class="min-w-0">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block leading-none">Your Starting Point</span>
+            <span id="current-origin-label" class="text-xs font-bold text-slate-800 truncate block mt-0.5">KIU Main Entrance Gate (Ggaba Rd)</span>
+          </div>
+        </div>
+        <select
+          id="quick-origin-select"
+          aria-label="Select Quick Start Location"
+          onchange="setOriginByBuildingId(this.value)"
+          class="min-h-[34px] max-w-[145px] px-2 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-kiu-maroon"
+        >
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+
+      <!-- ====================================================================
+           TAB PANELS CONTAINER (Scrollable Content)
+           ==================================================================== -->
+      <div id="tab-content-area" class="flex-1 overflow-y-auto custom-scroll p-3.5 space-y-3">
+
+        <!-- TAB 1: EXPLORE CAMPUS DIRECTORY -->
+        <section id="panel-explore" class="space-y-3">
+          <!-- Selected Building Spotlight Card (Shown when a building is clicked) -->
+          <div id="selected-building-card" class="hidden rounded-2xl border-2 border-kiu-maroon/25 bg-gradient-to-b from-red-50/60 to-white p-3.5 shadow-sm">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- Directory List Header -->
+          <div class="flex items-center justify-between">
+            <h2 id="directory-heading" class="text-xs font-extrabold uppercase tracking-wider text-slate-500">All Campus Buildings &amp; Landmarks (9)</h2>
+            <span id="stepfree-indicator-text" class="text-[11px] font-semibold text-slate-400">Standard Walk Mode</span>
+          </div>
+
+          <!-- Buildings & Matching Rooms List -->
+          <div id="directory-list" class="space-y-2.5">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <!-- TAB 2: PEDESTRIAN & STEP-FREE ROUTING -->
+        <section id="panel-route" class="hidden space-y-3">
+          <!-- Origin & Destination Selector Card -->
+          <div class="rounded-2xl bg-slate-50 border border-slate-200 p-3 space-y-2.5">
+            <div>
+              <label for="route-origin-select" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Start Location</label>
+              <div class="flex gap-1.5">
+                <select id="route-origin-select" onchange="setOriginByBuildingId(this.value)" class="flex-1 min-h-[42px] px-3 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800"></select>
+                <button type="button" onclick="locateUserGps()" class="min-h-[42px] px-3 rounded-xl bg-blue-600 text-white text-xs font-bold shrink-0 hover:bg-blue-700 transition">Use GPS</button>
+              </div>
+            </div>
+
+            <div>
+              <label for="route-dest-select" class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Destination Building</label>
+              <select id="route-dest-select" onchange="setDestinationByBuildingId(this.value)" class="w-full min-h-[42px] px-3 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-800"></select>
+            </div>
+
+            <!-- Step-Free Accessibility Toggle inside Route Tab -->
+            <div class="flex items-center justify-between pt-1 border-t border-slate-200/80">
+              <div class="flex items-center gap-2">
+                <span class="text-base">♿</span>
+                <div>
+                  <p class="text-xs font-bold text-slate-800">Step-Free / Wheelchair Route</p>
+                  <p class="text-[10px] text-slate-500">Avoids stairs; prioritizes paved ramps</p>
+                </div>
+              </div>
+              <button
+                id="route-tab-stepfree-switch"
+                type="button"
+                role="switch"
+                aria-checked="false"
+                onclick="toggleStepFree()"
+                class="w-12 h-7 rounded-full bg-slate-300 p-1 transition-colors flex items-center"
+              >
+                <span id="route-tab-stepfree-knob" class="w-5 h-5 rounded-full bg-white shadow transform transition-transform"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Route Summary & Walk Simulation Controls -->
+          <div id="route-summary-container">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <!-- TAB 3: MULTI-STORY INDOOR FLOOR PLAN VIEWER -->
+        <section id="panel-indoor" class="hidden space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-500">Indoor Architectural Schematic</h2>
+              <p id="indoor-building-title" class="text-sm font-extrabold text-slate-900">Select a building</p>
+            </div>
+            <button
+              type="button"
+              onclick="openQrModal()"
+              class="min-h-[38px] px-3 rounded-xl bg-kiu-maroon/10 text-kiu-maroon text-xs font-bold flex items-center gap-1.5 hover:bg-kiu-maroon/20 transition"
+            >
+              <span>📷</span>
+              <span>Scan Floor QR</span>
+            </button>
+          </div>
+
+          <!-- Building Switcher for Indoor Viewer -->
+          <select
+            id="indoor-building-select"
+            onchange="selectBuilding(this.value, { switchToIndoor: false })"
+            class="w-full min-h-[42px] px-3 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold text-slate-800"
+          ></select>
+
+          <!-- Floor Level Buttons (G, 1F, 2F, 3F) -->
+          <div id="floor-selector-buttons" class="flex items-center gap-2">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- SVG Architectural Floor Plan Canvas -->
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-2.5 shadow-inner">
+            <div id="indoor-svg-wrapper" class="w-full overflow-hidden rounded-xl bg-white border border-slate-200">
+              <!-- Dynamic SVG Floor Plan injected here -->
+            </div>
+            <div class="flex flex-wrap items-center gap-3 mt-2 text-[10px] font-semibold text-slate-500 px-1">
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Ramp / Lift</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block"></span> Stairwell</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-kiu-maroon inline-block"></span> Selected Room</span>
+            </div>
+          </div>
+
+          <!-- Rooms on Active Floor List -->
+          <div id="indoor-floor-rooms-list" class="space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <!-- TAB 4: OFFLINE SMART CAMPUS ASSISTANT ("ASK KIU GUIDE") -->
+        <section id="panel-guide" class="hidden space-y-3">
+          <div class="rounded-2xl bg-gradient-to-r from-kiu-maroon to-kiu-maroonDark text-white p-3.5 shadow-sm">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🎓</span>
+              <div>
+                <h2 class="text-sm font-extrabold">Ask KIU Campus Guide</h2>
+                <p class="text-[11px] text-kiu-goldLight">100% Offline Smart Directory &amp; Student Clearance Helper</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Suggested Quick Questions -->
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Popular Student &amp; Visitor Questions</p>
+            <div id="guide-quick-questions" class="flex flex-wrap gap-1.5">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Custom Question Input -->
+          <form onsubmit="handleGuideSubmit(event)" class="flex gap-2">
+            <input
+              id="guide-query-input"
+              type="text"
+              placeholder="e.g., Where do I do ICT & Finance clearance?"
+              class="flex-1 min-h-[44px] px-3.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-kiu-maroon focus:bg-white"
+            />
+            <button
+              type="submit"
+              class="min-h-[44px] px-4 rounded-xl bg-kiu-maroon text-white text-xs font-bold hover:bg-kiu-maroonDark transition shrink-0"
+            >Ask</button>
+          </form>
+
+          <!-- Assistant Response Feed -->
+          <div id="guide-responses" class="space-y-2.5">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <!-- TAB 5: SAVED FAVORITES (localStorage) -->
+        <section id="panel-saved" class="hidden space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-500">Bookmarked Rooms &amp; Buildings</h2>
+            <span id="saved-count-badge" class="px-2 py-0.5 rounded-full bg-kiu-gold/20 text-kiu-maroon text-[11px] font-bold">0 Saved</span>
+          </div>
+          <div id="saved-list" class="space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <!-- ======================================================================
+         5. QR FLOOR CHECKPOINT SCANNER & PLAQUE SIMULATOR MODAL
+         ====================================================================== -->
+    <div id="qr-modal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div class="p-4 bg-kiu-maroon text-white flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="text-lg">📷</span>
+            <div>
+              <h3 class="text-sm font-extrabold">Indoor QR Floor Checkpoint</h3>
+              <p class="text-[11px] text-kiu-goldLight">Snap your indoor floor &amp; wing location instantly</p>
+            </div>
+          </div>
+          <button type="button" onclick="closeQrModal()" class="w-9 h-9 rounded-full bg-white/15 text-white font-bold flex items-center justify-center hover:bg-white/25">✕</button>
+        </div>
+
+        <div class="p-4 space-y-3.5 max-h-[80dvh] overflow-y-auto custom-scroll">
+          <!-- Camera Viewport Box -->
+          <div class="relative w-full h-44 rounded-2xl bg-slate-900 overflow-hidden flex items-center justify-center border-2 border-slate-800">
+            <video id="qr-video" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+            <div id="qr-camera-fallback" class="text-center px-4">
+              <p class="text-xs font-bold text-slate-200" id="qr-camera-status">Initializing Camera Preview...</p>
+              <p class="text-[11px] text-slate-400 mt-1">Point at any KIU stairwell/lobby QR plaque or tap a sample plaque below.</p>
+            </div>
+            <!-- Scanning Reticle Frame -->
+            <div class="absolute inset-6 border-2 border-kiu-gold/80 rounded-xl pointer-events-none">
+              <div class="qr-laser"></div>
+            </div>
+          </div>
+
+          <!-- Instant One-Tap Sample Campus QR Plaques -->
+          <div>
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-2">Tap a Campus QR Plaque to Simulate Scan:</p>
+            <div id="qr-plaques-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         6. NON-BLOCKING TOAST NOTIFICATION BANNER
+         ====================================================================== -->
+    <div
+      id="toast-banner"
+      role="status"
+      aria-live="polite"
+      class="pointer-events-none fixed top-safe left-1/2 -translate-x-1/2 z-50 opacity-0 -translate-y-3 transition-all duration-300"
+    >
+      <div id="toast-inner" class="px-4 py-2.5 rounded-2xl bg-slate-900/95 text-white text-xs font-semibold shadow-xl border border-white/15 flex items-center gap-2 max-w-[90vw]">
+        <span id="toast-icon">ℹ️</span>
+        <span id="toast-text">Notification</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========================================================================
+       7. APPLICATION DATA, A* ROUTING ENGINE, DUAL MAP RENDERER & UI LOGIC
+       ======================================================================== -->
+  <script>
+    'use strict';
+
+    /* ------------------------------------------------------------------------
+       A. AUTHENTIC KIU MAIN CAMPUS SPATIAL DATASET (KANSANGA, GGABA ROAD)
+       Coordinates centered around [32.6045, 0.2943]
+       ------------------------------------------------------------------------ */
+    const KIU_CENTER = [32.6045, 0.2943];
+
+    const CATEGORIES = [
+      { id: 'All', label: 'All' },
+      { id: 'Academics', label: 'Academics' },
+      { id: 'Labs', label: 'Labs' },
+      { id: 'Admin', label: 'Admin' },
+      { id: 'Library', label: 'Library' },
+      { id: 'Health & Dining', label: 'Health & Dining' },
+      { id: 'Sports', label: 'Sports' }
+    ];
+
+    const KIU_BUILDINGS = [
+      {
+        id: 'GATE-MAIN',
+        code: 'MAIN GATE',
+        name: 'KIU Main Entrance Gate (Ggaba Rd)',
+        shortName: 'Main Gate',
+        category: 'Admin',
+        center: [32.60382, 0.29478],
+        portalNode: 'N_GATE',
+        height: 6,
+        floors: ['G'],
+        isAccessible: true,
+        accessibilityNote: 'Wide level paved pedestrian entry with wheelchair-accessible security lane.',
+        hours: 'Open 24 Hours (Student ID / Visitor Pass Required)',
+        description: 'Primary campus gateway along Ggaba Road in Kansanga featuring security verification, visitor reception, and main pedestrian plaza.',
+        polygon: [
+          [32.60374, 0.29486],
+          [32.60390, 0.29486],
+          [32.60390, 0.29470],
+          [32.60374, 0.29470],
+          [32.60374, 0.29486]
+        ],
+        rooms: [
+          { id: 'GATE-SEC', code: 'GATE-01', name: 'Security & Visitor Pass Desk', floor: 'G', category: 'Admin', accessible: true, grid: { x: 1, y: 1, w: 2, h: 2 }, desc: 'Visitor registration, guest badges, and campus entry assistance.' },
+          { id: 'GATE-KIOSK', code: 'GATE-02', name: 'Main Plaza Information Kiosk', floor: 'G', category: 'Admin', accessible: true, grid: { x: 4, y: 1, w: 2, h: 2 }, desc: 'Orientation guidance and QR map check-in point.' }
+        ]
+      },
+      {
+        id: 'ADMIN-BLK',
+        code: 'ADMIN',
+        name: 'Central Administration & Academic Registrar Block',
+        shortName: 'Admin & Registrar',
+        category: 'Admin',
+        center: [32.60428, 0.29462],
+        portalNode: 'N_ADMIN',
+        height: 15,
+        floors: ['G', '1F', '2F'],
+        isAccessible: true,
+        accessibilityNote: 'Step-free concrete ramp at West Plaza entrance; accessible washrooms on Ground Floor.',
+        hours: 'Mon – Fri: 8:00 AM – 5:00 PM | Sat: 9:00 AM – 1:00 PM',
+        description: 'Administrative headquarters of KIU housing Admissions, Academic Registrar, Finance & Bursar clearance desks, and Executive Offices.',
+        polygon: [
+          [32.60414, 0.29474],
+          [32.60442, 0.29474],
+          [32.60442, 0.29450],
+          [32.60414, 0.29450],
+          [32.60414, 0.29474]
+        ],
+        rooms: [
+          { id: 'ADM-G01', code: 'ADM-G01', name: 'Admissions & Student Inquiries Desk', floor: 'G', category: 'Admin', accessible: true, grid: { x: 1, y: 1, w: 2, h: 2 }, desc: 'New student applications, admission letters, and registration support.' },
+          { id: 'ADM-G02', code: 'ADM-G02', name: 'Finance & Bursar Clearance Office', floor: 'G', category: 'Admin', accessible: true, grid: { x: 4, y: 1, w: 2, h: 2 }, desc: 'Tuition verification, financial clearance stamps, and fee statements.' },
+          { id: 'ADM-G03', code: 'ADM-WC', name: 'Accessible Washrooms (Ground)', floor: 'G', category: 'Health & Dining', accessible: true, grid: { x: 7, y: 1, w: 2, h: 2 }, desc: 'Wheelchair-accessible restroom facilities near the west ramp.' },
+          { id: 'ADM-101', code: 'REG-101', name: 'Academic Registrar’s Office', floor: '1F', category: 'Admin', accessible: false, grid: { x: 1, y: 1, w: 3, h: 2 }, desc: 'Academic records, course registration, retake forms, and graduation clearance.' },
+          { id: 'ADM-102', code: 'EXM-104', name: 'Examinations & Transcripts Registry', floor: '1F', category: 'Admin', accessible: false, grid: { x: 5, y: 1, w: 4, h: 2 }, desc: 'Exam permits, academic transcripts, and certificate issuance.' },
+          { id: 'ADM-201', code: 'VC-201', name: 'Vice Chancellor’s Office & Senate Suite', floor: '2F', category: 'Admin', accessible: false, grid: { x: 1, y: 1, w: 4, h: 2 }, desc: 'Office of the Vice Chancellor and Deputy Vice Chancellor (Academic Affairs).' },
+          { id: 'ADM-202', code: 'HR-205', name: 'Human Resources & Legal Directorate', floor: '2F', category: 'Admin', accessible: false, grid: { x: 6, y: 1, w: 3, h: 2 }, desc: 'Staff recruitment, faculty administration, and institutional legal services.' }
+        ]
+      },
+      {
+        id: 'MAIN-LIB',
+        code: 'LIBRARY',
+        name: 'Iddi Basajjabalaba Memorial Library',
+        shortName: 'Main Library',
+        category: 'Library',
+        center: [32.60472, 0.29458],
+        portalNode: 'N_LIB',
+        height: 20,
+        floors: ['G', '1F', '2F', '3F'],
+        isAccessible: true,
+        accessibilityNote: 'Full step-free access via front entrance ramp and internal passenger elevator to all 4 floors.',
+        hours: 'Mon – Fri: 7:30 AM – 10:00 PM | Sat – Sun: 9:00 AM – 6:00 PM',
+        description: 'Four-story central university library offering print collections, digital e-resource workstations, quiet reading halls, and postgraduate research rooms.',
+        polygon: [
+          [32.60458, 0.29472],
+          [32.60486, 0.29472],
+          [32.60486, 0.29446],
+          [32.60458, 0.29446],
+          [32.60458, 0.29472]
+        ],
+        rooms: [
+          { id: 'LIB-G01', code: 'LIB-G01', name: 'Circulation, Security & Reference Desk', floor: 'G', category: 'Library', accessible: true, grid: { x: 1, y: 1, w: 3, h: 2 }, desc: 'Book borrowing/returns, library card activation, and reference assistance.' },
+          { id: 'LIB-G02', code: 'LIB-ER1', name: 'Digital E-Resources & Koha Catalog Lab', floor: 'G', category: 'Labs', accessible: true, grid: { x: 5, y: 1, w: 4, h: 2 }, desc: 'High-speed computers for IEEE, Springer, Research4Life, and e-journal access.' },
+          { id: 'LIB-101', code: 'LIB-1F', name: 'Humanities, Law & Education Wing', floor: '1F', category: 'Library', accessible: true, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'Law reports, education textbooks, business journals, and quiet study tables.' },
+          { id: 'LIB-201', code: 'LIB-2F', name: 'Science, Computing & Engineering Wing', floor: '2F', category: 'Library', accessible: true, grid: { x: 1, y: 1, w: 5, h: 2 }, desc: 'Computer science, engineering, and biomedical textbooks.' },
+          { id: 'LIB-202', code: 'LIB-POD', name: 'Collaborative Discussion Pods (2F)', floor: '2F', category: 'Library', accessible: true, grid: { x: 7, y: 1, w: 2, h: 2 }, desc: 'Glass-enclosed group study rooms bookable at the circulation desk.' },
+          { id: 'LIB-301', code: 'LIB-3F', name: 'Postgraduate & Doctoral Research Commons', floor: '3F', category: 'Library', accessible: true, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'Silent research floor, KIU thesis repository, and postgraduate carrels.' }
+        ]
+      },
+      {
+        id: 'CIT-BLK',
+        code: 'CIT BLOCK',
+        name: 'College of Computing & Information Technology (CIT)',
+        shortName: 'CIT Block',
+        category: 'Academics',
+        center: [32.60518, 0.29478],
+        portalNode: 'N_CIT',
+        height: 15,
+        floors: ['G', '1F', '2F'],
+        isAccessible: true,
+        accessibilityNote: 'Accessible ramp at main south-west entrance serving Ground Floor labs and ICT helpdesk.',
+        hours: 'Mon – Sat: 7:30 AM – 8:00 PM',
+        description: 'Hub for Computer Science, Information Technology, and Software Engineering featuring hands-on computing labs, Cisco Academy, and ICT Student Helpdesk.',
+        polygon: [
+          [32.60504, 0.29490],
+          [32.60532, 0.29490],
+          [32.60532, 0.29466],
+          [32.60504, 0.29466],
+          [32.60504, 0.29490]
+        ],
+        rooms: [
+          { id: 'CIT-G01', code: 'ICT-DESK', name: 'ICT Clearance & Student Portal Helpdesk', floor: 'G', category: 'Admin', accessible: true, grid: { x: 1, y: 1, w: 3, h: 2 }, desc: 'Student email activation, ERP portal resets, Wi-Fi setup, and ICT clearance.' },
+          { id: 'CIT-G02', code: 'CIT-LAB1', name: 'CIT Lab 1 (Software & Web Engineering)', floor: 'G', category: 'Labs', accessible: true, grid: { x: 5, y: 1, w: 4, h: 2 }, desc: '60-seat practical computing laboratory for programming and systems development.' },
+          { id: 'CIT-101', code: 'CIT-LAB2', name: 'CIT Lab 2 (AI, GIS & Data Science)', floor: '1F', category: 'Labs', accessible: false, grid: { x: 1, y: 1, w: 4, h: 2 }, desc: 'High-performance workstations for machine learning, spatial GIS, and analytics.' },
+          { id: 'CIT-102', code: 'CISCO-01', name: 'Cisco Networking & Hardware Lab', floor: '1F', category: 'Labs', accessible: false, grid: { x: 6, y: 1, w: 3, h: 2 }, desc: 'Routers, switches, IoT kits, and CCNA practical training lab.' },
+          { id: 'CIT-201', code: 'CIT-DEAN', name: 'Office of the Dean of CIT & IT Dept', floor: '2F', category: 'Academics', accessible: false, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'Dean of Computing, Head of Information Technology, and lecturer consultation offices.' }
+        ]
+      },
+      {
+        id: 'IBR-CPLX',
+        code: 'IBR COMPLEX',
+        name: 'Institute of Biomedical Research (IBR) Complex',
+        shortName: 'IBR Complex',
+        category: 'Labs',
+        center: [32.60515, 0.29412],
+        portalNode: 'N_IBR',
+        height: 22,
+        floors: ['G', '1F', '2F', '3F'],
+        isAccessible: true,
+        accessibilityNote: 'Step-free ramp into Ground Lobby, Lecture Theatre A & B, and accessible ground restrooms.',
+        hours: 'Mon – Sat: 7:30 AM – 8:30 PM',
+        description: 'Flagship 4-story biomedical sciences and large lecture auditorium complex hosting IBR research laboratories and tiered lecture theatres.',
+        polygon: [
+          [32.60500, 0.29426],
+          [32.60530, 0.29426],
+          [32.60530, 0.29398],
+          [32.60500, 0.29398],
+          [32.60500, 0.29426]
+        ],
+        rooms: [
+          { id: 'IBR-G01', code: 'IBR-LTA', name: 'Lecture Theatre A (Main Auditorium)', floor: 'G', category: 'Academics', accessible: true, grid: { x: 1, y: 1, w: 4, h: 2 }, desc: '350-seat tiered auditorium for plenary lectures, conferences, and seminars.' },
+          { id: 'IBR-G02', code: 'IBR-LTB', name: 'Lecture Theatre B', floor: 'G', category: 'Academics', accessible: true, grid: { x: 6, y: 1, w: 3, h: 2 }, desc: '200-seat lecture theatre on the ground south wing.' },
+          { id: 'IBR-101', code: 'IBR-LAB1', name: 'IBR Lab 1 (Microbiology & Pathology)', floor: '1F', category: 'Labs', accessible: false, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'Clinical microbiology, histology, and biosafety teaching laboratory.' },
+          { id: 'IBR-201', code: 'IBR-LAB2', name: 'IBR Lab 2 (Biochemistry & Pharmacology)', floor: '2F', category: 'Labs', accessible: false, grid: { x: 1, y: 1, w: 5, h: 2 }, desc: 'Analytical chemistry, pharmacology, and molecular diagnostics lab.' },
+          { id: 'IBR-202', code: 'IBR-SEM', name: 'IBR Seminar & Colloquium Room', floor: '2F', category: 'Academics', accessible: false, grid: { x: 7, y: 1, w: 2, h: 2 }, desc: 'Research defense and postgraduate presentation room.' },
+          { id: 'IBR-301', code: 'IBR-3F', name: 'Biomedical Research & Health Sciences Offices', floor: '3F', category: 'Academics', accessible: false, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'Principal investigators, postgraduate research suites, and faculty offices.' }
+        ]
+      },
+      {
+        id: 'SCI-LECT',
+        code: 'SCI & ENG',
+        name: 'Science & Engineering Lecture Complex',
+        shortName: 'Science & Eng',
+        category: 'Academics',
+        center: [32.60458, 0.29398],
+        portalNode: 'N_SCI',
+        height: 15,
+        floors: ['G', '1F', '2F'],
+        isAccessible: true,
+        accessibilityNote: 'Ground Floor Lecture Halls LH1–LH2 and Physics Lab are step-free via South-West Promenade.',
+        hours: 'Mon – Sat: 7:30 AM – 8:00 PM',
+        description: 'Three-story academic complex housing Lecture Halls LH1 through LH6, Engineering Drawing Studio, and Physics & Electronics Laboratories.',
+        polygon: [
+          [32.60442, 0.29410],
+          [32.60474, 0.29410],
+          [32.60474, 0.29386],
+          [32.60442, 0.29386],
+          [32.60442, 0.29410]
+        ],
+        rooms: [
+          { id: 'SCI-G01', code: 'LH-1 & LH-2', name: 'Lecture Halls LH1 & LH2 (Ground)', floor: 'G', category: 'Academics', accessible: true, grid: { x: 1, y: 1, w: 4, h: 2 }, desc: 'General undergraduate lecture rooms on the ground floor.' },
+          { id: 'SCI-G02', code: 'PHY-LAB', name: 'Physics & Electronics Laboratory', floor: 'G', category: 'Labs', accessible: true, grid: { x: 6, y: 1, w: 3, h: 2 }, desc: 'Applied physics, circuits, and instrumentation practical lab.' },
+          { id: 'SCI-101', code: 'LH-3 & LH-4', name: 'Lecture Halls LH3 & LH4 (1st Floor)', floor: '1F', category: 'Academics', accessible: false, grid: { x: 1, y: 1, w: 4, h: 2 }, desc: 'First-floor lecture halls for Engineering and Applied Sciences.' },
+          { id: 'SCI-102', code: 'ENG-CAD', name: 'Engineering Drawing & CAD Studio', floor: '1F', category: 'Labs', accessible: false, grid: { x: 6, y: 1, w: 3, h: 2 }, desc: 'Drafting tables and AutoCAD/SolidWorks workstations.' },
+          { id: 'SCI-201', code: 'LH-5 & LH-6', name: 'Lecture Halls LH5 & LH6 (2nd Floor)', floor: '2F', category: 'Academics', accessible: false, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'Upper-level lecture rooms and engineering department coordination.' }
+        ]
+      },
+      {
+        id: 'MED-CLIN',
+        code: 'CLINIC',
+        name: 'University Health Center / Clinic',
+        shortName: 'Health Center',
+        category: 'Health & Dining',
+        center: [32.60425, 0.29505],
+        portalNode: 'N_CLINIC',
+        height: 7,
+        floors: ['G'],
+        isAccessible: true,
+        accessibilityNote: '100% single-level ground facility with wide ambulance & wheelchair bay.',
+        hours: 'Open 24 Hours (Emergency & Outpatient Care)',
+        description: 'On-campus medical clinic providing outpatient consultations, pharmacy dispensing, laboratory diagnostics, and 24/7 emergency response.',
+        polygon: [
+          [32.60412, 0.29514],
+          [32.60438, 0.29514],
+          [32.60438, 0.29496],
+          [32.60412, 0.29496],
+          [32.60412, 0.29514]
+        ],
+        rooms: [
+          { id: 'MED-01', code: 'MED-TRI', name: 'Outpatient Triage & Doctor Consultation', floor: 'G', category: 'Health & Dining', accessible: true, grid: { x: 1, y: 1, w: 3, h: 2 }, desc: 'Primary student & staff medical checkups and clinician rooms.' },
+          { id: 'MED-02', code: 'MED-PHM', name: 'University Dispensary & Pharmacy', floor: 'G', category: 'Health & Dining', accessible: true, grid: { x: 5, y: 1, w: 2, h: 2 }, desc: 'Prescription medications and first-aid supplies.' },
+          { id: 'MED-03', code: 'MED-EMG', name: '24/7 Emergency & Ambulance Desk', floor: 'G', category: 'Health & Dining', accessible: true, grid: { x: 8, y: 1, w: 1, h: 2 }, desc: 'Urgent medical stabilization and referral coordination.' }
+        ]
+      },
+      {
+        id: 'HOSTEL-A',
+        code: 'HOSTELS',
+        name: 'On-Campus Student Hostels & Dining Hall',
+        shortName: 'Hostels & Dining',
+        category: 'Health & Dining',
+        center: [32.60398, 0.29382],
+        portalNode: 'N_HOSTEL',
+        height: 14,
+        floors: ['G', '1F', '2F'],
+        isAccessible: true,
+        accessibilityNote: 'Ground Floor Main Cafeteria, Student Guild Office, and Accessible Lounge are fully step-free.',
+        hours: 'Cafeteria: 6:30 AM – 9:30 PM | Hostels: 24 Hours',
+        description: 'Residential complex comprising Hostel Blocks A, B, and C, the Main Student Cafeteria & Dining Hall, and the KIU Student Guild Office.',
+        polygon: [
+          [32.60382, 0.29396],
+          [32.60414, 0.29396],
+          [32.60414, 0.29368],
+          [32.60382, 0.29368],
+          [32.60382, 0.29396]
+        ],
+        rooms: [
+          { id: 'HST-G01', code: 'CAFE-01', name: 'Main Student Cafeteria & Dining Hall', floor: 'G', category: 'Health & Dining', accessible: true, grid: { x: 1, y: 1, w: 5, h: 2 }, desc: 'Hot meals, breakfast, refreshments, and indoor seating.' },
+          { id: 'HST-G02', code: 'GUILD-01', name: 'KIU Student Guild Executive Office', floor: 'G', category: 'Admin', accessible: true, grid: { x: 7, y: 1, w: 2, h: 2 }, desc: 'Student leadership, welfare support, and clubs coordination.' },
+          { id: 'HST-101', code: 'BLK-A', name: 'Hostel Block A (Female Wing & Warden)', floor: '1F', category: 'Health & Dining', accessible: false, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'On-campus female student accommodation and custodian office.' },
+          { id: 'HST-201', code: 'BLK-BC', name: 'Hostel Blocks B & C (Male & International)', floor: '2F', category: 'Health & Dining', accessible: false, grid: { x: 1, y: 1, w: 8, h: 2 }, desc: 'On-campus male and international student residential wings.' }
+        ]
+      },
+      {
+        id: 'SPORTS-GND',
+        code: 'SPORTS',
+        name: 'Sports & Recreation Grounds',
+        shortName: 'Sports Grounds',
+        category: 'Sports',
+        center: [32.60452, 0.29338],
+        portalNode: 'N_SPORTS',
+        height: 4,
+        floors: ['G'],
+        isAccessible: true,
+        accessibilityNote: 'Level perimeter viewing track and accessible pavilion apron.',
+        hours: 'Daily: 6:00 AM – 7:00 PM',
+        description: 'University athletics complex featuring the main football pitch, outdoor basketball and volleyball courts, and sports pavilion.',
+        polygon: [
+          [32.60418, 0.29356],
+          [32.60486, 0.29356],
+          [32.60486, 0.29320],
+          [32.60418, 0.29320],
+          [32.60418, 0.29356]
+        ],
+        rooms: [
+          { id: 'SPT-01', code: 'PITCH-01', name: 'KIU Main Football Pitch & Track', floor: 'G', category: 'Sports', accessible: true, grid: { x: 1, y: 1, w: 5, h: 2 }, desc: 'Regulation turf football pitch for inter-faculty tournaments and athletics.' },
+          { id: 'SPT-02', code: 'COURT-01', name: 'Basketball & Volleyball Courts', floor: 'G', category: 'Sports', accessible: true, grid: { x: 7, y: 1, w: 2, h: 2 }, desc: 'Hardcourt basketball, netball, and volleyball facilities.' }
+        ]
+      }
+    ];
+
+    /* ------------------------------------------------------------------------
+       B. TOPOLOGICAL PEDESTRIAN GRAPH (WALKWAYS, RAMPS & STAIRWAYS)
+       ------------------------------------------------------------------------ */
+    const GRAPH_NODES = {
+      N_GATE:          { id: 'N_GATE',          coord: [32.60382, 0.29478], label: 'KIU Main Entrance Gate' },
+      N_PLAZA_W:       { id: 'N_PLAZA_W',       coord: [32.60405, 0.29474], label: 'Main Entrance Plaza West' },
+      N_CLINIC:        { id: 'N_CLINIC',        coord: [32.60425, 0.29498], label: 'Health Center Walkway' },
+      N_ADMIN:         { id: 'N_ADMIN',         coord: [32.60428, 0.29466], label: 'Admin Block Ramp Entrance' },
+      N_PLAZA_C:       { id: 'N_PLAZA_C',       coord: [32.60450, 0.29464], label: 'Central Clocktower Courtyard' },
+      N_LIB:           { id: 'N_LIB',           coord: [32.60472, 0.29462], label: 'Main Library Lift & Ramp Lobby' },
+      N_NE_JCT:        { id: 'N_NE_JCT',        coord: [32.60495, 0.29472], label: 'North-East Academic Junction' },
+      N_CIT:           { id: 'N_CIT',           coord: [32.60516, 0.29476], label: 'CIT Block Ramp Entrance' },
+      N_E_WALK:        { id: 'N_E_WALK',        coord: [32.60496, 0.29436], label: 'Eastern Academic Promenade' },
+      N_IBR:           { id: 'N_IBR',           coord: [32.60512, 0.29414], label: 'IBR Ground Lobby Entrance' },
+      N_MID_STEPS_TOP: { id: 'N_MID_STEPS_TOP', coord: [32.60454, 0.29442], label: 'Central Terrace Overlook' },
+      N_MID_STEPS_BOT: { id: 'N_MID_STEPS_BOT', coord: [32.60456, 0.29416], label: 'Science Complex North Terrace' },
+      N_RAMP_W:        { id: 'N_RAMP_W',        coord: [32.60425, 0.29432], label: 'West Accessible Garden Ramp' },
+      N_SCI:           { id: 'N_SCI',           coord: [32.60458, 0.29404], label: 'Science & Eng Complex Entrance' },
+      N_SW_JCT:        { id: 'N_SW_JCT',        coord: [32.60424, 0.29396], label: 'South-West Promenade' },
+      N_HOSTEL:        { id: 'N_HOSTEL',        coord: [32.60400, 0.29386], label: 'Hostels & Cafeteria Entrance' },
+      N_S_GATE:        { id: 'N_S_GATE',        coord: [32.60452, 0.29368], label: 'Sports Complex North Gate' },
+      N_SPORTS:        { id: 'N_SPORTS',        coord: [32.60452, 0.29348], label: 'Sports Pavilion & Courts' }
+    };
+
+    // Each edge connects two nodes bidirectionally; isStepFree=false denotes stairways
+    const GRAPH_EDGES = [
+      { from: 'N_GATE',          to: 'N_PLAZA_W',       type: 'walkway', isStepFree: true,  note: 'Walk east along the main entrance boulevard' },
+      { from: 'N_PLAZA_W',       to: 'N_CLINIC',        type: 'ramp',    isStepFree: true,  note: 'Follow the paved accessible path north to the Health Center' },
+      { from: 'N_PLAZA_W',       to: 'N_ADMIN',         type: 'ramp',    isStepFree: true,  note: 'Take the wide accessible ramp to Central Administration' },
+      { from: 'N_ADMIN',         to: 'N_PLAZA_C',       type: 'walkway', isStepFree: true,  note: 'Continue east across the Central Clocktower Courtyard' },
+      { from: 'N_PLAZA_C',       to: 'N_LIB',           type: 'ramp',    isStepFree: true,  note: 'Follow the paved library forecourt to Iddi Basajjabalaba Library' },
+      { from: 'N_LIB',           to: 'N_NE_JCT',        type: 'walkway', isStepFree: true,  note: 'Walk northeast past the Library wing' },
+      { from: 'N_NE_JCT',        to: 'N_CIT',           type: 'ramp',    isStepFree: true,  note: 'Enter the CIT Block via the accessible ground ramp' },
+      { from: 'N_NE_JCT',        to: 'N_E_WALK',        type: 'walkway', isStepFree: true,  note: 'Head south along the Eastern Academic Promenade' },
+      { from: 'N_E_WALK',        to: 'N_IBR',           type: 'ramp',    isStepFree: true,  note: 'Enter the IBR Complex ground lobby via the paved ramp' },
+      { from: 'N_PLAZA_C',       to: 'N_MID_STEPS_TOP', type: 'walkway', isStepFree: true,  note: 'Head south from the Clocktower Courtyard toward the central terrace' },
+      { from: 'N_MID_STEPS_TOP', to: 'N_MID_STEPS_BOT', type: 'stairs',  isStepFree: false, note: 'Descend/ascend the Central Terrace Stairway (18 steps)' },
+      { from: 'N_MID_STEPS_BOT', to: 'N_SCI',           type: 'walkway', isStepFree: true,  note: 'Continue straight to the Science & Engineering Complex' },
+      { from: 'N_SCI',           to: 'N_IBR',           type: 'ramp',    isStepFree: true,  note: 'Follow the gentle sloped academic link between Science & IBR' },
+      { from: 'N_ADMIN',         to: 'N_RAMP_W',        type: 'ramp',    isStepFree: true,  note: 'Use the West Accessible Garden Ramp (step-free slope)' },
+      { from: 'N_RAMP_W',        to: 'N_SW_JCT',        type: 'ramp',    isStepFree: true,  note: 'Continue along the smooth South-West Garden Ramp' },
+      { from: 'N_SW_JCT',        to: 'N_SCI',           type: 'walkway', isStepFree: true,  note: 'Walk east along the level promenade to Science & Engineering' },
+      { from: 'N_SW_JCT',        to: 'N_HOSTEL',        type: 'walkway', isStepFree: true,  note: 'Head southwest to the Student Hostels & Dining Hall' },
+      { from: 'N_SW_JCT',        to: 'N_S_GATE',        type: 'walkway', isStepFree: true,  note: 'Follow the southern walkway toward the Sports Complex' },
+      { from: 'N_IBR',           to: 'N_S_GATE',        type: 'walkway', isStepFree: true,  note: 'Walk southwest along the perimeter walkway to Sports Gate' },
+      { from: 'N_S_GATE',        to: 'N_SPORTS',        type: 'walkway', isStepFree: true,  note: 'Enter the Sports & Recreation Grounds pavilion area' }
+    ];
+
+    /* Sample QR Floor Checkpoints mounted around KIU Main Campus */
+    const QR_PLAQUES = [
+      { id: 'QR-IBR-G',   label: 'IBR Ground Lobby QR',     buildingId: 'IBR-CPLX', floor: 'G',  roomId: 'IBR-G01', desc: 'Main Auditorium & Reception' },
+      { id: 'QR-LIB-2F',  label: 'Library 2nd Floor QR',    buildingId: 'MAIN-LIB', floor: '2F', roomId: 'LIB-201', desc: 'Science & Computing Wing' },
+      { id: 'QR-CIT-ICT', label: 'CIT ICT Helpdesk QR',     buildingId: 'CIT-BLK',  floor: 'G',  roomId: 'CIT-G01', desc: 'ICT Clearance & Labs' },
+      { id: 'QR-ADM-REG', label: 'Admin Registrar 1F QR',   buildingId: 'ADMIN-BLK',floor: '1F', roomId: 'ADM-101', desc: 'Academic Registrar & Exams' },
+      { id: 'QR-GATE',    label: 'Main Gate Kiosk QR',      buildingId: 'GATE-MAIN',floor: 'G',  roomId: 'GATE-KIOSK', desc: 'Ggaba Road Entrance' },
+      { id: 'QR-CAFE',    label: 'Hostels Cafeteria QR',    buildingId: 'HOSTEL-A', floor: 'G',  roomId: 'HST-G01', desc: 'Main Dining & Guild Office' }
+    ];
+
+    /* Offline Smart Campus Guide Knowledge Base */
+    const GUIDE_QA_TOPICS = [
+      {
+        question: 'Where do I do ICT & Finance clearance?',
+        keywords: ['ict', 'finance', 'bursar', 'clearance', 'tuition', 'portal', 'email', 'stamp'],
+        answer: 'Student clearance requires two quick stops: (1) Visit the **ICT Clearance & Student Portal Helpdesk (ICT-DESK)** on the Ground Floor of the **CIT Block** for portal/email clearance, and (2) Visit the **Finance & Bursar Clearance Office (ADM-G02)** on the Ground Floor of the **Central Administration Block** for tuition verification.',
+        primaryBuildingId: 'CIT-BLK',
+        primaryRoomId: 'CIT-G01',
+        secondaryBuildingId: 'ADMIN-BLK'
+      },
+      {
+        question: 'Where is IBR Lab 2?',
+        keywords: ['ibr', 'lab 2', 'biochemistry', 'pharmacology', 'biomedical', 'ibr-lab2'],
+        answer: '**IBR Lab 2 (Biochemistry & Pharmacology)** is located on the **2nd Floor (2F)** of the **Institute of Biomedical Research (IBR) Complex** on the eastern side of campus. Enter via the Eastern Academic Promenade ground lobby and take the main stairwell to 2F.',
+        primaryBuildingId: 'IBR-CPLX',
+        primaryRoomId: 'IBR-201'
+      },
+      {
+        question: 'Nearest wheelchair-accessible washroom?',
+        keywords: ['wheelchair', 'accessible', 'washroom', 'toilet', 'restroom', 'step-free', 'disability', 'ramp'],
+        answer: 'Step-free wheelchair-accessible washrooms are available at **ADM-WC (Ground Floor, Central Administration Block)** right beside the West Accessible Ramp, as well as on the Ground Floors of the **Iddi Basajjabalaba Memorial Library** (which also features a passenger elevator to all 4 floors) and the **IBR Complex**.',
+        primaryBuildingId: 'ADMIN-BLK',
+        primaryRoomId: 'ADM-G03'
+      },
+      {
+        question: 'Where is the Main Library & E-Resources?',
+        keywords: ['library', 'books', 'borrow', 'e-resources', 'koha', 'study', 'reading', 'iddi'],
+        answer: 'The **Iddi Basajjabalaba Memorial Library** is the 4-story building in the center of campus just east of the Clocktower Courtyard. Circulation & the **Digital E-Resources Lab (LIB-ER1)** are on the Ground Floor, with a passenger lift serving floors 1F–3F.',
+        primaryBuildingId: 'MAIN-LIB',
+        primaryRoomId: 'LIB-G02'
+      },
+      {
+        question: 'Where do I collect exam permits or transcripts?',
+        keywords: ['exam', 'permit', 'transcript', 'registrar', 'retake', 'graduation', 'admission'],
+        answer: 'Exam permits, transcripts, and retake registration forms are processed at the **Examinations & Transcripts Registry (EXM-104)** and **Academic Registrar’s Office (REG-101)** on the **1st Floor (1F)** of the **Central Administration Block**.',
+        primaryBuildingId: 'ADMIN-BLK',
+        primaryRoomId: 'ADM-102'
+      },
+      {
+        question: 'Where is the University Clinic & Emergency desk?',
+        keywords: ['clinic', 'health', 'sick', 'doctor', 'pharmacy', 'emergency', 'ambulance', 'medical'],
+        answer: 'The **University Health Center / Clinic** is located on the north-west side of campus near the Main Gate. It operates **24/7** with step-free ground access for outpatient triage, pharmacy dispensing, and emergency care.',
+        primaryBuildingId: 'MED-CLIN',
+        primaryRoomId: 'MED-01'
+      }
+    ];
+
+    /* ------------------------------------------------------------------------
+       C. GLOBAL APPLICATION STATE
+       ------------------------------------------------------------------------ */
+    const state = {
+      mapEngine: 'maplibre',       // 'maplibre' | 'schematic'
+      maplibreReady: false,
+      darkMap: false,
+      stepFreeMode: false,
+      activeCategory: 'All',
+      searchQuery: '',
+      activeTab: 'explore',        // 'explore' | 'route' | 'indoor' | 'guide' | 'saved'
+      sheetState: 'half',          // 'collapsed' | 'half' | 'expanded'
+      originBuildingId: 'GATE-MAIN',
+      originCustomCoord: null,     // Used when real GPS is on-campus
+      originLabel: 'KIU Main Entrance Gate (Ggaba Rd)',
+      selectedBuildingId: 'MAIN-LIB',
+      selectedFloor: 'G',
+      selectedRoomId: null,
+      activeRoute: null,           // Computed A* route object
+      favorites: [],               // Array of { type: 'building'|'room', id, buildingId, title, subtitle }
+      walkSim: {
+        active: false,
+        paused: false,
+        progress: 0,               // 0 to 1 along route polyline
+        timerId: null
+      }
+    };
+
+    let mapInstance = null;
+    let buildingMarkers = {};
+    let originMarker = null;
+    let walkerMarker = null;
+    let qrStream = null;
+    let toastTimer = null;
+
+    /* Schematic Canvas Pan/Zoom State */
+    const schematicView = {
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+      isDragging: false,
+      dragStartX: 0,
+      dragStartY: 0,
+      lastPinchDist: 0,
+      buildingScreenBoxes: []
+    };
+
+    /* ------------------------------------------------------------------------
+       D. GEOSPATIAL MATH & A* PEDESTRIAN ROUTING ENGINE
+       ------------------------------------------------------------------------ */
+    function haversineMeters(coordA, coordB) {
+      const R = 6371000;
+      const toRad = deg => (deg * Math.PI) / 180;
+      const dLat = toRad(coordB[1] - coordA[1]);
+      const dLon = toRad(coordB[0] - coordA[0]);
+      const lat1 = toRad(coordA[1]);
+      const lat2 = toRad(coordB[1]);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function findNearestGraphNode(coord) {
+      let bestId = 'N_GATE';
+      let bestDist = Infinity;
+      for (const nodeId in GRAPH_NODES) {
+        const d = haversineMeters(coord, GRAPH_NODES[nodeId].coord);
+        if (d < bestDist) {
+          bestDist = d;
+          bestId = nodeId;
+        }
+      }
+      return { nodeId: bestId, distance: bestDist };
+    }
+
+    /**
+     * Client-Side A* Pathfinder with Step-Free Accessibility Constraint
+     */
+    function computePedestrianRoute(startNodeId, endNodeId, stepFreeOnly) {
+      if (startNodeId === endNodeId) {
+        const node = GRAPH_NODES[startNodeId];
+        return {
+          pathNodes: [node],
+          coordinates: [node.coord],
+          totalMeters: 0,
+          etaMinutes: 1,
+          steps: [{
+            instruction: `You are already at ${node.label}.`,
+            distance: 0,
+            type: 'arrive',
+            coord: node.coord
+          }],
+          stepFreeUsed: stepFreeOnly
+        };
+      }
+
+      // Build adjacency list respecting stepFreeOnly
+      const adj = {};
+      for (const id in GRAPH_NODES) adj[id] = [];
+      for (const edge of GRAPH_EDGES) {
+        if (stepFreeOnly && !edge.isStepFree) continue;
+        const dist = Math.round(haversineMeters(GRAPH_NODES[edge.from].coord, GRAPH_NODES[edge.to].coord));
+        adj[edge.from].push({ to: edge.to, dist, type: edge.type, isStepFree: edge.isStepFree, note: edge.note });
+        adj[edge.to].push({ to: edge.from, dist, type: edge.type, isStepFree: edge.isStepFree, note: edge.note });
+      }
+
+      const openSet = new Set([startNodeId]);
+      const cameFrom = {};
+      const edgeUsed = {};
+      const gScore = {};
+      const fScore = {};
+
+      for (const id in GRAPH_NODES) {
+        gScore[id] = Infinity;
+        fScore[id] = Infinity;
+      }
+
+      gScore[startNodeId] = 0;
+      fScore[startNodeId] = haversineMeters(GRAPH_NODES[startNodeId].coord, GRAPH_NODES[endNodeId].coord);
+
+      while (openSet.size > 0) {
+        let current = null;
+        let lowestF = Infinity;
+        for (const id of openSet) {
+          if (fScore[id] < lowestF) {
+            lowestF = fScore[id];
+            current = id;
+          }
+        }
+
+        if (current === endNodeId) {
+          // Reconstruct path
+          const nodeIds = [];
+          const edges = [];
+          let curr = current;
+          while (curr) {
+            nodeIds.unshift(curr);
+            if (edgeUsed[curr]) edges.unshift(edgeUsed[curr]);
+            curr = cameFrom[curr];
+          }
+
+          const pathNodes = nodeIds.map(id => GRAPH_NODES[id]);
+          const coordinates = pathNodes.map(n => n.coord);
+          const totalMeters = Math.round(gScore[endNodeId]);
+          // Walking speed: 1.35 m/s standard, 0.95 m/s step-free wheelchair pace
+          const speedMps = stepFreeOnly ? 0.95 : 1.35;
+          const etaMinutes = Math.max(1, Math.ceil(totalMeters / speedMps / 60));
+
+          const steps = edges.map((e, idx) => ({
+            instruction: e.note,
+            distance: e.dist,
+            type: e.type,
+            isStepFree: e.isStepFree,
+            coord: GRAPH_NODES[nodeIds[idx + 1]].coord
+          }));
+
+          const destBuilding = KIU_BUILDINGS.find(b => b.portalNode === endNodeId);
+          steps.push({
+            instruction: `Arrive at ${destBuilding ? destBuilding.name : GRAPH_NODES[endNodeId].label}.`,
+            distance: 0,
+            type: 'arrive',
+            isStepFree: true,
+            coord: GRAPH_NODES[endNodeId].coord
+          });
+
+          return {
+            pathNodes,
+            coordinates,
+            totalMeters,
+            etaMinutes,
+            steps,
+            stepFreeUsed: stepFreeOnly
+          };
+        }
+
+        openSet.delete(current);
+
+        for (const neighbor of adj[current]) {
+          const tentativeG = gScore[current] + neighbor.dist;
+          if (tentativeG < gScore[neighbor.to]) {
+            cameFrom[neighbor.to] = current;
+            edgeUsed[neighbor.to] = neighbor;
+            gScore[neighbor.to] = tentativeG;
+            fScore[neighbor.to] = tentativeG + haversineMeters(GRAPH_NODES[neighbor.to].coord, GRAPH_NODES[endNodeId].coord);
+            openSet.add(neighbor.to);
+          }
+        }
+      }
+
+      return null;
+    }
+
+    /* ------------------------------------------------------------------------
+       E. AUDIO & TOAST HELPERS (ZERO EXTERNAL SOUND URLS, NO ALERT())
+       ------------------------------------------------------------------------ */
+    function playChime(freq = 660) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.35, ctx.currentTime + 0.14);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.19);
+      } catch (e) {
+        // Ignore audio restrictions if user hasn't interacted yet
+      }
+    }
+
+    function showToast(message, icon = 'ℹ️') {
+      const banner = document.getElementById('toast-banner');
+      const textEl = document.getElementById('toast-text');
+      const iconEl = document.getElementById('toast-icon');
+      textEl.textContent = message;
+      iconEl.textContent = icon;
+      banner.classList.remove('opacity-0', '-translate-y-3');
+      banner.classList.add('opacity-100', 'translate-y-0');
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.remove('opacity-100', 'translate-y-0');
+        banner.classList.add('opacity-0', '-translate-y-3');
+      }, 3400);
+    }
+
+    /* ------------------------------------------------------------------------
+       F. MAPLIBRE GL JS 3D VECTOR MAP INITIALIZATION & LAYER UPDATES
+       ------------------------------------------------------------------------ */
+    function getBuildingGeoJSON() {
+      return {
+        type: 'FeatureCollection',
+        features: KIU_BUILDINGS.map(b => ({
+          type: 'Feature',
+          id: b.id,
+          properties: {
+            id: b.id,
+            code: b.code,
+            name: b.name,
+            category: b.category,
+            height: b.height,
+            isSelected: b.id === state.selectedBuildingId ? 1 : 0
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [b.polygon]
+          }
+        }))
+      };
+    }
+
+    function getWalkwaysGeoJSON() {
+      return {
+        type: 'FeatureCollection',
+        features: GRAPH_EDGES.map((e, idx) => ({
+          type: 'Feature',
+          id: idx,
+          properties: {
+            type: e.type,
+            isStepFree: e.isStepFree ? 1 : 0
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [GRAPH_NODES[e.from].coord, GRAPH_NODES[e.to].coord]
+          }
+        }))
+      };
+    }
+
+    function getActiveRouteGeoJSON() {
+      if (!state.activeRoute || state.activeRoute.coordinates.length < 2) {
+        return { type: 'FeatureCollection', features: [] };
+      }
+      return {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: state.activeRoute.coordinates
+          }
+        }]
+      };
+    }
+
+    function getRasterStyleObject(isDark) {
+      const tileUrl = isDark
+        ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+        : 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png';
+
+      return {
+        version: 8,
+        sources: {
+          'carto-base': {
+            type: 'raster',
+            tiles: [tileUrl],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors © CARTO | KIU GIS'
+          }
+        },
+        layers: [
+          {
+            id: 'carto-base-layer',
+            type: 'raster',
+            source: 'carto-base',
+            minzoom: 0,
+            maxzoom: 22
+          }
+        ]
+      };
+    }
+
+    function addCustom3DLayers() {
+      if (!mapInstance) return;
+
+      // Campus Perimeter Ground Polygon
+      const campusBoundary = {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [32.60368, 0.29524],
+              [32.60545, 0.29524],
+              [32.60545, 0.29312],
+              [32.60368, 0.29312],
+              [32.60368, 0.29524]
+            ]]
+          }
+        }]
+      };
+
+      if (!mapInstance.getSource('kiu-campus-ground')) {
+        mapInstance.addSource('kiu-campus-ground', { type: 'geojson', data: campusBoundary });
+        mapInstance.addLayer({
+          id: 'kiu-campus-ground-fill',
+          type: 'fill',
+          source: 'kiu-campus-ground',
+          paint: {
+            'fill-color': state.darkMap ? '#1E293B' : '#ECFDF5',
+            'fill-opacity': 0.55
+          }
+        });
+        mapInstance.addLayer({
+          id: 'kiu-campus-ground-outline',
+          type: 'line',
+          source: 'kiu-campus-ground',
+          paint: {
+            'line-color': '#7A1C1C',
+            'line-width': 2,
+            'line-dasharray': [3, 2]
+          }
+        });
+      }
+
+      // Pedestrian Walkways & Accessibility Ramps
+      if (!mapInstance.getSource('kiu-walkways')) {
+        mapInstance.addSource('kiu-walkways', { type: 'geojson', data: getWalkwaysGeoJSON() });
+        mapInstance.addLayer({
+          id: 'kiu-walkways-line',
+          type: 'line',
+          source: 'kiu-walkways',
+          paint: {
+            'line-color': [
+              'case',
+              ['==', ['get', 'type'], 'stairs'], '#F59E0B',
+              ['==', ['get', 'type'], 'ramp'], '#10B981',
+              state.darkMap ? '#94A3B8' : '#64748B'
+            ],
+            'line-width': 3.5,
+            'line-opacity': 0.85
+          }
+        });
+      }
+
+      // 3D Extruded Buildings
+      if (!mapInstance.getSource('kiu-buildings')) {
+        mapInstance.addSource('kiu-buildings', { type: 'geojson', data: getBuildingGeoJSON() });
+        mapInstance.addLayer({
+          id: 'kiu-buildings-3d',
+          type: 'fill-extrusion',
+          source: 'kiu-buildings',
+          paint: {
+            'fill-extrusion-color': [
+              'case',
+              ['==', ['get', 'id'], state.selectedBuildingId], '#7A1C1C',
+              ['==', ['get', 'category'], 'Library'], '#1D4ED8',
+              ['==', ['get', 'category'], 'Labs'], '#0F766E',
+              ['==', ['get', 'category'], 'Admin'], '#9A3412',
+              ['==', ['get', 'category'], 'Health & Dining'], '#B45309',
+              ['==', ['get', 'category'], 'Sports'], '#15803D',
+              '#334155'
+            ],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': 0,
+            'fill-extrusion-opacity': 0.88
+          }
+        });
+
+        // Building click handler
+        mapInstance.on('click', 'kiu-buildings-3d', (e) => {
+          if (e.features && e.features.length > 0) {
+            const bId = e.features[0].properties.id;
+            selectBuilding(bId, { flyTo: true, openMobileHalf: true });
+          }
+        });
+
+        mapInstance.on('mouseenter', 'kiu-buildings-3d', () => {
+          mapInstance.getCanvas().style.cursor = 'pointer';
+        });
+        mapInstance.on('mouseleave', 'kiu-buildings-3d', () => {
+          mapInstance.getCanvas().style.cursor = '';
+        });
+      }
+
+      // Active Pedestrian Route Polyline
+      if (!mapInstance.getSource('kiu-active-route')) {
+        mapInstance.addSource('kiu-active-route', { type: 'geojson', data: getActiveRouteGeoJSON() });
+        mapInstance.addLayer({
+          id: 'kiu-route-casing',
+          type: 'line',
+          source: 'kiu-active-route',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#7A1C1C',
+            'line-width': 9,
+            'line-opacity': 0.9
+          }
+        });
+        mapInstance.addLayer({
+          id: 'kiu-route-core',
+          type: 'line',
+          source: 'kiu-active-route',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#FBBF24',
+            'line-width': 5
+          }
+        });
+      }
+
+      syncMapLibreMarkers();
+    }
+
+    function syncMapLibreMarkers() {
+      if (!mapInstance) return;
+
+      // Clear existing building markers
+      Object.values(buildingMarkers).forEach(m => m.remove());
+      buildingMarkers = {};
+
+      KIU_BUILDINGS.forEach(b => {
+        const el = document.createElement('div');
+        el.className = `kiu-marker ${b.id === state.selectedBuildingId ? 'is-selected' : ''}`;
+        el.innerHTML = `
+          <div class="kiu-marker-pill">
+            <span>${b.shortName}</span>
+          </div>
+          <div class="kiu-marker-stem"></div>
+        `;
+        el.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          selectBuilding(b.id, { flyTo: true, openMobileHalf: true });
+        });
+
+        buildingMarkers[b.id] = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+          .setLngLat(b.center)
+          .addTo(mapInstance);
+      });
+
+      // Origin / User Location Marker
+      const originCoord = getOriginCoord();
+      if (!originMarker) {
+        const puck = document.createElement('div');
+        puck.className = 'user-puck';
+        puck.title = 'Your Starting Location';
+        originMarker = new maplibregl.Marker({ element: puck })
+          .setLngLat(originCoord)
+          .addTo(mapInstance);
+      } else {
+        originMarker.setLngLat(originCoord);
+      }
+    }
+
+    function updateMapVisuals() {
+      // Update MapLibre sources & paint
+      if (mapInstance && state.maplibreReady) {
+        const bSrc = mapInstance.getSource('kiu-buildings');
+        if (bSrc) bSrc.setData(getBuildingGeoJSON());
+
+        const rSrc = mapInstance.getSource('kiu-active-route');
+        if (rSrc) rSrc.setData(getActiveRouteGeoJSON());
+
+        if (mapInstance.getLayer('kiu-buildings-3d')) {
+          mapInstance.setPaintProperty('kiu-buildings-3d', 'fill-extrusion-color', [
+            'case',
+            ['==', ['get', 'id'], state.selectedBuildingId], '#7A1C1C',
+            ['==', ['get', 'category'], 'Library'], '#1D4ED8',
+            ['==', ['get', 'category'], 'Labs'], '#0F766E',
+            ['==', ['get', 'category'], 'Admin'], '#9A3412',
+            ['==', ['get', 'category'], 'Health & Dining'], '#B45309',
+            ['==', ['get', 'category'], 'Sports'], '#15803D',
+            '#334155'
+          ]);
+        }
+
+        syncMapLibreMarkers();
+      }
+
+      // Always re-render Offline Schematic Canvas so it's instantaneously ready
+      renderSchematicCanvas();
+    }
+
+    function initMapLibre() {
+      if (typeof maplibregl === 'undefined') {
+        // CDN blocked or strictly offline: seamlessly switch to built-in Offline Schematic Map
+        setMapEngine('schematic', true);
+        return;
+      }
+
+      try {
+        mapInstance = new maplibregl.Map({
+          container: 'maplibre-container',
+          style: getRasterStyleObject(state.darkMap),
+          center: KIU_CENTER,
+          zoom: 17.5,
+          pitch: 48,
+          bearing: -15,
+          antialias: true
+        });
+
+        mapInstance.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+
+        mapInstance.on('load', () => {
+          state.maplibreReady = true;
+          addCustom3DLayers();
+          updateMapVisuals();
+        });
+
+        mapInstance.on('error', () => {
+          // If raster tiles fail to load due to offline connection, fallback cleanly
+          if (!state.maplibreReady) {
+            setMapEngine('schematic', true);
+          }
+        });
+      } catch (err) {
+        setMapEngine('schematic', true);
+      }
+    }
+
+    /* ------------------------------------------------------------------------
+       G. BUILT-IN OFFLINE INTERACTIVE VECTOR CANVAS MAP (ZERO-NETWORK BACKUP)
+       ------------------------------------------------------------------------ */
+    function projectCoordToCanvas(coord, width, height) {
+      // Bounding box of KIU Main Campus
+      const minLon = 32.60355, maxLon = 32.60555;
+      const minLat = 0.29305,  maxLat = 0.29532;
+
+      const pad = Math.min(width, height) * 0.1;
+      const usableW = width - pad * 2;
+      const usableH = height - pad * 2;
+
+      const normX = (coord[0] - minLon) / (maxLon - minLon);
+      const normY = 1 - (coord[1] - minLat) / (maxLat - minLat);
+
+      const baseX = pad + normX * usableW;
+      const baseY = pad + normY * usableH;
+
+      // Apply interactive pan & pinch-zoom around center
+      const cx = width / 2;
+      const cy = height / 2;
+      return {
+        x: cx + (baseX - cx) * schematicView.scale + schematicView.offsetX,
+        y: cy + (baseY - cy) * schematicView.scale + schematicView.offsetY
+      };
+    }
+
+    function renderSchematicCanvas() {
+      const canvas = document.getElementById('schematic-canvas');
+      if (!canvas) return;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(300, rect.width * dpr);
+      canvas.height = Math.max(300, rect.height * dpr);
+
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const w = rect.width;
+      const h = rect.height;
+
+      // Background
+      ctx.fillStyle = state.darkMap ? '#0B1120' : '#F1F5F9';
+      ctx.fillRect(0, 0, w, h);
+
+      // Subtle architectural grid
+      ctx.strokeStyle = state.darkMap ? 'rgba(148,163,184,0.08)' : 'rgba(15,23,42,0.05)';
+      ctx.lineWidth = 1;
+      const step = 36 * schematicView.scale;
+      for (let gx = (schematicView.offsetX % step); gx < w; gx += step) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+      }
+      for (let gy = (schematicView.offsetY % step); gy < h; gy += step) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      }
+
+      // Ggaba Road Artery along West Edge
+      const roadTop = projectCoordToCanvas([32.60362, 0.29530], w, h);
+      const roadBot = projectCoordToCanvas([32.60362, 0.29308], w, h);
+      ctx.strokeStyle = state.darkMap ? '#334155' : '#CBD5E1';
+      ctx.lineWidth = 22 * schematicView.scale;
+      ctx.beginPath();
+      ctx.moveTo(roadTop.x, roadTop.y);
+      ctx.lineTo(roadBot.x, roadBot.y);
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(roadTop.x, (roadTop.y + roadBot.y) / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = state.darkMap ? '#94A3B8' : '#475569';
+      ctx.font = `700 ${Math.max(10, 11 * schematicView.scale)}px Inter, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('GGABA ROAD (KANSANGA)', 0, 4);
+      ctx.restore();
+
+      // Campus Perimeter Compound
+      const perimCoords = [
+        [32.60370, 0.29522],
+        [32.60542, 0.29522],
+        [32.60542, 0.29314],
+        [32.60370, 0.29314]
+      ];
+      ctx.beginPath();
+      perimCoords.forEach((c, i) => {
+        const p = projectCoordToCanvas(c, w, h);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = state.darkMap ? 'rgba(30, 41, 59, 0.72)' : '#ECFDF5';
+      ctx.fill();
+      ctx.strokeStyle = '#7A1C1C';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw Walkways, Ramps & Stairs
+      GRAPH_EDGES.forEach(edge => {
+        const p1 = projectCoordToCanvas(GRAPH_NODES[edge.from].coord, w, h);
+        const p2 = projectCoordToCanvas(GRAPH_NODES[edge.to].coord, w, h);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        if (edge.type === 'stairs') {
+          ctx.strokeStyle = '#F59E0B';
+          ctx.setLineDash([4, 3]);
+        } else if (edge.type === 'ramp') {
+          ctx.strokeStyle = '#10B981';
+          ctx.setLineDash([]);
+        } else {
+          ctx.strokeStyle = state.darkMap ? '#64748B' : '#94A3B8';
+          ctx.setLineDash([]);
+        }
+        ctx.lineWidth = 3.5 * schematicView.scale;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      // Draw 2.5D Extruded Building Polygons
+      schematicView.buildingScreenBoxes = [];
+      const categoryColors = {
+        Library: '#1D4ED8',
+        Labs: '#0F766E',
+        Admin: '#9A3412',
+        'Health & Dining': '#B45309',
+        Sports: '#15803D',
+        Academics: '#334155'
+      };
+
+      KIU_BUILDINGS.forEach(b => {
+        const isSel = b.id === state.selectedBuildingId;
+        const pts = b.polygon.map(c => projectCoordToCanvas(c, w, h));
+        const extrudeOffset = (b.height * 0.45) * schematicView.scale;
+
+        // 2.5D Shadow/Extrusion Side
+        ctx.beginPath();
+        pts.forEach((p, idx) => {
+          if (idx === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
+        ctx.fill();
+
+        // Roof Face (shifted upward for 3D effect)
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        ctx.beginPath();
+        pts.forEach((p, idx) => {
+          const rx = p.x;
+          const ry = p.y - extrudeOffset;
+          minX = Math.min(minX, rx); maxX = Math.max(maxX, rx);
+          minY = Math.min(minY, ry); maxY = Math.max(maxY, ry);
+          if (idx === 0) ctx.moveTo(rx, ry);
+          else ctx.lineTo(rx, ry);
+        });
+        ctx.closePath();
+        ctx.fillStyle = isSel ? '#7A1C1C' : (categoryColors[b.category] || '#334155');
+        ctx.fill();
+        ctx.lineWidth = isSel ? 3 : 1.5;
+        ctx.strokeStyle = isSel ? '#FBBF24' : '#FFFFFF';
+        ctx.stroke();
+
+        // Building Label
+        const centerPt = projectCoordToCanvas(b.center, w, h);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `700 ${Math.max(10, 11 * schematicView.scale)}px Inter, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(b.shortName, centerPt.x, centerPt.y - extrudeOffset + 3);
+
+        schematicView.buildingScreenBoxes.push({ id: b.id, minX, maxX, minY, maxY });
+      });
+
+      // Draw Active Route Polyline
+      if (state.activeRoute && state.activeRoute.coordinates.length >= 2) {
+        ctx.beginPath();
+        state.activeRoute.coordinates.forEach((c, i) => {
+          const p = projectCoordToCanvas(c, w, h);
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.strokeStyle = '#7A1C1C';
+        ctx.lineWidth = 8 * schematicView.scale;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        ctx.strokeStyle = '#FBBF24';
+        ctx.lineWidth = 4.5 * schematicView.scale;
+        ctx.stroke();
+      }
+
+      // Draw Origin Blue Puck
+      const origPt = projectCoordToCanvas(getOriginCoord(), w, h);
+      ctx.beginPath();
+      ctx.arc(origPt.x, origPt.y, 11, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(37, 99, 235, 0.25)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(origPt.x, origPt.y, 6.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#2563EB';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.stroke();
+
+      // Draw Simulated Walker Puck if active
+      if (state.walkSim.active && state.activeRoute) {
+        const simCoord = getInterpolatedRouteCoord(state.activeRoute.coordinates, state.walkSim.progress);
+        const simPt = projectCoordToCanvas(simCoord, w, h);
+        ctx.beginPath();
+        ctx.arc(simPt.x, simPt.y, 9, 0, Math.PI * 2);
+        ctx.fillStyle = '#D99B26';
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#7A1C1C';
+        ctx.stroke();
+      }
+    }
+
+    function initSchematicCanvasInteractions() {
+      const canvas = document.getElementById('schematic-canvas');
+      if (!canvas) return;
+
+      let downX = 0, downY = 0;
+
+      canvas.addEventListener('mousedown', (e) => {
+        schematicView.isDragging = true;
+        downX = e.clientX;
+        downY = e.clientY;
+        schematicView.dragStartX = e.clientX - schematicView.offsetX;
+        schematicView.dragStartY = e.clientY - schematicView.offsetY;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!schematicView.isDragging) return;
+        schematicView.offsetX = e.clientX - schematicView.dragStartX;
+        schematicView.offsetY = e.clientY - schematicView.dragStartY;
+        renderSchematicCanvas();
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        if (!schematicView.isDragging) return;
+        schematicView.isDragging = false;
+        // Detect click (minimal movement)
+        if (Math.hypot(e.clientX - downX, e.clientY - downY) < 6) {
+          const rect = canvas.getBoundingClientRect();
+          handleSchematicTap(e.clientX - rect.left, e.clientY - rect.top);
+        }
+      });
+
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.12 : 0.9;
+        schematicView.scale = Math.min(3.2, Math.max(0.7, schematicView.scale * factor));
+        renderSchematicCanvas();
+      }, { passive: false });
+
+      // Touch pan & pinch-zoom for iOS Safari & Android Chrome
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          schematicView.isDragging = true;
+          downX = e.touches[0].clientX;
+          downY = e.touches[0].clientY;
+          schematicView.dragStartX = downX - schematicView.offsetX;
+          schematicView.dragStartY = downY - schematicView.offsetY;
+        } else if (e.touches.length === 2) {
+          schematicView.isDragging = false;
+          schematicView.lastPinchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        }
+      }, { passive: true });
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && schematicView.isDragging) {
+          schematicView.offsetX = e.touches[0].clientX - schematicView.dragStartX;
+          schematicView.offsetY = e.touches[0].clientY - schematicView.dragStartY;
+          renderSchematicCanvas();
+        } else if (e.touches.length === 2) {
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          if (schematicView.lastPinchDist > 0) {
+            const ratio = dist / schematicView.lastPinchDist;
+            schematicView.scale = Math.min(3.2, Math.max(0.7, schematicView.scale * ratio));
+            renderSchematicCanvas();
+          }
+          schematicView.lastPinchDist = dist;
+        }
+      }, { passive: true });
+
+      canvas.addEventListener('touchend', (e) => {
+        if (schematicView.isDragging && e.changedTouches.length === 1) {
+          const t = e.changedTouches[0];
+          if (Math.hypot(t.clientX - downX, t.clientY - downY) < 10) {
+            const rect = canvas.getBoundingClientRect();
+            handleSchematicTap(t.clientX - rect.left, t.clientY - rect.top);
+          }
+        }
+        schematicView.isDragging = false;
+        schematicView.lastPinchDist = 0;
+      });
+    }
+
+    function handleSchematicTap(x, y) {
+      for (let i = schematicView.buildingScreenBoxes.length - 1; i >= 0; i--) {
+        const box = schematicView.buildingScreenBoxes[i];
+        if (x >= box.minX - 6 && x <= box.maxX + 6 && y >= box.minY - 6 && y <= box.maxY + 6) {
+          selectBuilding(box.id, { flyTo: false, openMobileHalf: true });
+          return;
+        }
+      }
+    }
+
+    /* ------------------------------------------------------------------------
+       H. MAP ENGINE, DARK MODE, ACCESSIBILITY & GPS CONTROLS
+       ------------------------------------------------------------------------ */
+    function setMapEngine(engine, silent = false) {
+      state.mapEngine = engine;
+      const mlEl = document.getElementById('maplibre-container');
+      const scEl = document.getElementById('schematic-container');
+      const btn3d = document.getElementById('btn-engine-3d');
+      const btnSc = document.getElementById('btn-engine-schematic');
+      const mobLabel = document.getElementById('mobile-mapmode-label');
+
+      if (engine === 'schematic') {
+        mlEl.classList.add('hidden');
+        scEl.classList.remove('hidden');
+        btnSc.className = 'min-h-[36px] px-3 rounded-lg text-xs font-bold bg-kiu-maroon text-white transition';
+        btn3d.className = 'min-h-[36px] px-3 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition';
+        if (mobLabel) mobLabel.textContent = '3D Vector';
+        renderSchematicCanvas();
+        if (!silent) showToast('Switched to Offline Schematic Campus Map', '🗺️');
+      } else {
+        scEl.classList.add('hidden');
+        mlEl.classList.remove('hidden');
+        btn3d.className = 'min-h-[36px] px-3 rounded-lg text-xs font-bold bg-kiu-maroon text-white transition';
+        btnSc.className = 'min-h-[36px] px-3 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition';
+        if (mobLabel) mobLabel.textContent = 'Offline Map';
+        if (mapInstance) mapInstance.resize();
+        if (!silent) showToast('Switched to 3D Vector Extrusion Map', '🏙️');
+      }
+    }
+
+    function toggleMapEngine() {
+      setMapEngine(state.mapEngine === 'maplibre' ? 'schematic' : 'maplibre');
+    }
+
+    function toggleDarkMap() {
+      state.darkMap = !state.darkMap;
+      document.getElementById('mobile-darkmode-icon').textContent = state.darkMap ? '☀️' : '🌙';
+      document.getElementById('desktop-darkmode-icon').textContent = state.darkMap ? '☀️' : '🌙';
+      document.getElementById('desktop-darkmode-text').textContent = state.darkMap ? 'Light' : 'Dark';
+
+      if (mapInstance && state.maplibreReady) {
+        mapInstance.setStyle(getRasterStyleObject(state.darkMap));
+        mapInstance.once('style.load', () => {
+          addCustom3DLayers();
+          updateMapVisuals();
+        });
+      }
+      renderSchematicCanvas();
+      showToast(state.darkMap ? 'Dark Map Mode enabled' : 'Light Map Mode enabled', state.darkMap ? '🌙' : '☀️');
+    }
+
+    function toggleStepFree() {
+      state.stepFreeMode = !state.stepFreeMode;
+
+      // Update Desktop Badge
+      const deskBtn = document.getElementById('desktop-stepfree-btn');
+      const deskBadge = document.getElementById('desktop-stepfree-badge');
+      if (state.stepFreeMode) {
+        deskBtn.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-50');
+        deskBadge.textContent = 'ON';
+        deskBadge.className = 'px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px]';
+      } else {
+        deskBtn.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-50');
+        deskBadge.textContent = 'OFF';
+        deskBadge.className = 'px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[10px]';
+      }
+
+      // Update Mobile Pill
+      const mobBtn = document.getElementById('mobile-stepfree-btn');
+      if (state.stepFreeMode) {
+        mobBtn.className = 'min-h-[38px] px-3 rounded-full bg-emerald-600 text-white shadow-md text-xs font-bold flex items-center gap-1.5 active:scale-95 transition';
+      } else {
+        mobBtn.className = 'min-h-[38px] px-3 rounded-full bg-white/95 backdrop-blur shadow-md border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 active:scale-95 transition';
+      }
+
+      // Update Route Tab Switch
+      const sw = document.getElementById('route-tab-stepfree-switch');
+      const knob = document.getElementById('route-tab-stepfree-knob');
+      if (sw && knob) {
+        sw.setAttribute('aria-checked', String(state.stepFreeMode));
+        sw.className = `w-12 h-7 rounded-full p-1 transition-colors flex items-center ${state.stepFreeMode ? 'bg-emerald-600' : 'bg-slate-300'}`;
+        knob.className = `w-5 h-5 rounded-full bg-white shadow transform transition-transform ${state.stepFreeMode ? 'translate-x-5' : 'translate-x-0'}`;
+      }
+
+      document.getElementById('stepfree-indicator-text').textContent = state.stepFreeMode
+        ? '♿ Step-Free Ramps Active'
+        : 'Standard Walk Mode';
+
+      // Recompute active route immediately if one exists
+      if (state.activeRoute) {
+        recalculateActiveRoute();
+      }
+      renderSelectedBuildingCard();
+      showToast(
+        state.stepFreeMode
+          ? 'Step-Free Mode ON: Stairs excluded, prioritizing wheelchair ramps.'
+          : 'Standard Pedestrian Mode: All walkways and stair shortcuts enabled.',
+        '♿'
+      );
+    }
+
+    function getOriginCoord() {
+      if (state.originCustomCoord) return state.originCustomCoord;
+      const b = KIU_BUILDINGS.find(item => item.id === state.originBuildingId) || KIU_BUILDINGS[0];
+      return GRAPH_NODES[b.portalNode].coord;
+    }
+
+    function getOriginPortalNode() {
+      if (state.originCustomCoord) {
+        return findNearestGraphNode(state.originCustomCoord).nodeId;
+      }
+      const b = KIU_BUILDINGS.find(item => item.id === state.originBuildingId) || KIU_BUILDINGS[0];
+      return b.portalNode;
+    }
+
+    function setOriginByBuildingId(buildingId) {
+      const b = KIU_BUILDINGS.find(item => item.id === buildingId);
+      if (!b) return;
+      state.originBuildingId = b.id;
+      state.originCustomCoord = null;
+      state.originLabel = b.name;
+
+      document.getElementById('current-origin-label').textContent = b.name;
+      document.getElementById('quick-origin-select').value = b.id;
+      document.getElementById('route-origin-select').value = b.id;
+
+      if (state.activeRoute) {
+        recalculateActiveRoute();
+      }
+      updateMapVisuals();
+      showToast(`Starting point set to ${b.shortName}`, '📍');
+    }
+
+    function locateUserGps() {
+      if (!('geolocation' in navigator)) {
+        showToast('Device GPS not supported; using KIU Main Gate.', '📍');
+        setOriginByBuildingId('GATE-MAIN');
+        return;
+      }
+
+      showToast('Acquiring live GNSS/GPS fix...', '🛰️');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const userCoord = [pos.coords.longitude, pos.coords.latitude];
+          const distFromCampus = haversineMeters(userCoord, KIU_CENTER);
+
+          if (distFromCampus <= 1200) {
+            // User is physically on or right beside KIU Main Campus
+            const nearest = findNearestGraphNode(userCoord);
+            state.originCustomCoord = userCoord;
+            state.originLabel = `Live GPS (Near ${GRAPH_NODES[nearest.nodeId].label})`;
+            document.getElementById('current-origin-label').textContent = state.originLabel;
+            if (mapInstance && state.maplibreReady) {
+              mapInstance.flyTo({ center: userCoord, zoom: 18, duration: 900 });
+            }
+            if (state.activeRoute) recalculateActiveRoute();
+            updateMapVisuals();
+            showToast(`GPS locked within ±${Math.round(pos.coords.accuracy)}m on campus!`, '✅');
+          } else {
+            // User is currently off-campus (e.g., testing from home/office)
+            const kmAway = (distFromCampus / 1000).toFixed(1);
+            setOriginByBuildingId('GATE-MAIN');
+            resetMapCamera();
+            showToast(`You are ${kmAway} km from KIU Kansanga. Simulated start at KIU Main Gate.`, '🧭');
+          }
+        },
+        () => {
+          setOriginByBuildingId('GATE-MAIN');
+          showToast('GPS permission unavailable; defaulted to KIU Main Gate.', '📍');
+        },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 15000 }
+      );
+    }
+
+    function resetMapCamera() {
+      schematicView.scale = 1;
+      schematicView.offsetX = 0;
+      schematicView.offsetY = 0;
+      renderSchematicCanvas();
+
+      if (mapInstance && state.maplibreReady) {
+        mapInstance.flyTo({
+          center: KIU_CENTER,
+          zoom: 17.5,
+          pitch: 48,
+          bearing: -15,
+          duration: 850
+        });
+      }
+    }
+
+    /* ------------------------------------------------------------------------
+       I. BUILDING SELECTION, ROUTING & WALK SIMULATION
+       ------------------------------------------------------------------------ */
+    function selectBuilding(buildingId, options = {}) {
+      const b = KIU_BUILDINGS.find(item => item.id === buildingId);
+      if (!b) return;
+
+      state.selectedBuildingId = b.id;
+      if (!b.floors.includes(state.selectedFloor)) {
+        state.selectedFloor = b.floors[0];
+      }
+      if (options.roomId) {
+        state.selectedRoomId = options.roomId;
+        const rm = b.rooms.find(r => r.id === options.roomId);
+        if (rm) state.selectedFloor = rm.floor;
+      } else {
+        state.selectedRoomId = null;
+      }
+
+      document.getElementById('route-dest-select').value = b.id;
+      document.getElementById('indoor-building-select').value = b.id;
+
+      renderSelectedBuildingCard();
+      renderIndoorViewer();
+      updateMapVisuals();
+
+      if (options.flyTo && mapInstance && state.maplibreReady) {
+        mapInstance.flyTo({ center: b.center, zoom: 18.2, duration: 750 });
+      }
+
+      if (options.switchToIndoor) {
+        switchTab('indoor');
+      } else if (options.navigateNow) {
+        navigateToBuilding(b.id, options.roomId || null);
+      } else {
+        switchTab('explore');
+      }
+
+      if (options.openMobileHalf && window.innerWidth < 768) {
+        setSheetState('half');
+      }
+    }
+
+    function setDestinationByBuildingId(buildingId) {
+      selectBuilding(buildingId, { navigateNow: true });
+    }
+
+    function navigateToBuilding(buildingId, roomId = null) {
+      stopWalkSimulation();
+      const destBuilding = KIU_BUILDINGS.find(b => b.id === buildingId);
+      if (!destBuilding) return;
+
+      state.selectedBuildingId = destBuilding.id;
+      state.selectedRoomId = roomId;
+      if (roomId) {
+        const rm = destBuilding.rooms.find(r => r.id === roomId);
+        if (rm) state.selectedFloor = rm.floor;
+      }
+
+      document.getElementById('route-dest-select').value = destBuilding.id;
+      recalculateActiveRoute();
+      switchTab('route');
+      updateMapVisuals();
+
+      if (window.innerWidth < 768) {
+        setSheetState('half');
+      }
+      playChime(580);
+    }
+
+    function recalculateActiveRoute() {
+      const destBuilding = KIU_BUILDINGS.find(b => b.id === state.selectedBuildingId);
+      if (!destBuilding) return;
+
+      const startNode = getOriginPortalNode();
+      const endNode = destBuilding.portalNode;
+      const route = computePedestrianRoute(startNode, endNode, state.stepFreeMode);
+      state.activeRoute = route;
+
+      renderRoutePanel();
+      updateMobileSheetSummary();
+      updateMapVisuals();
+    }
+
+    function getInterpolatedRouteCoord(coords, t) {
+      if (!coords || coords.length === 0) return KIU_CENTER;
+      if (coords.length === 1 || t <= 0) return coords[0];
+      if (t >= 1) return coords[coords.length - 1];
+
+      let totalLen = 0;
+      const segLens = [];
+      for (let i = 0; i < coords.length - 1; i++) {
+        const d = haversineMeters(coords[i], coords[i + 1]);
+        segLens.push(d);
+        totalLen += d;
+      }
+
+      const targetDist = totalLen * t;
+      let accum = 0;
+      for (let i = 0; i < segLens.length; i++) {
+        if (accum + segLens[i] >= targetDist) {
+          const localT = segLens[i] === 0 ? 0 : (targetDist - accum) / segLens[i];
+          return [
+            coords[i][0] + (coords[i + 1][0] - coords[i][0]) * localT,
+            coords[i][1] + (coords[i + 1][1] - coords[i][1]) * localT
+          ];
+        }
+        accum += segLens[i];
+      }
+      return coords[coords.length - 1];
+    }
+
+    function toggleWalkSimulation() {
+      if (!state.activeRoute || state.activeRoute.coordinates.length < 2) {
+        showToast('Select a different start and destination to simulate a walk.', '🚶');
+        return;
+      }
+
+      if (state.walkSim.active) {
+        stopWalkSimulation();
+        return;
+      }
+
+      state.walkSim.active = true;
+      state.walkSim.progress = 0;
+      renderRoutePanel();
+      showToast('Simulating pedestrian walk along KIU route...', '🚶');
+
+      if (mapInstance && state.maplibreReady) {
+        if (!walkerMarker) {
+          const el = document.createElement('div');
+          el.className = 'w-6 h-6 rounded-full bg-kiu-gold border-3 border-kiu-maroon shadow-lg flex items-center justify-center text-[11px] font-black text-kiu-maroon';
+          el.textContent = '🚶';
+          walkerMarker = new maplibregl.Marker({ element: el })
+            .setLngLat(state.activeRoute.coordinates[0])
+            .addTo(mapInstance);
+        }
+      }
+
+      state.walkSim.timerId = setInterval(() => {
+        state.walkSim.progress += 0.015;
+        if (state.walkSim.progress >= 1) {
+          state.walkSim.progress = 1;
+          const finalCoord = state.activeRoute.coordinates[state.activeRoute.coordinates.length - 1];
+          if (walkerMarker) walkerMarker.setLngLat(finalCoord);
+          renderSchematicCanvas();
+          playChime(780);
+          showToast('You have arrived at your KIU destination!', '🎉');
+          stopWalkSimulation(true);
+          return;
+        }
+
+        const currCoord = getInterpolatedRouteCoord(state.activeRoute.coordinates, state.walkSim.progress);
+        if (walkerMarker) {
+          walkerMarker.setLngLat(currCoord);
+        }
+        renderSchematicCanvas();
+        updateSimProgressBar();
+      }, 90);
+    }
+
+    function stopWalkSimulation(keepAtEnd = false) {
+      clearInterval(state.walkSim.timerId);
+      state.walkSim.active = false;
+      if (!keepAtEnd) {
+        state.walkSim.progress = 0;
+        if (walkerMarker) {
+          walkerMarker.remove();
+          walkerMarker = null;
+        }
+      }
+      renderRoutePanel();
+      renderSchematicCanvas();
+    }
+
+    function updateSimProgressBar() {
+      const bar = document.getElementById('walk-sim-progress-bar');
+      if (bar) {
+        bar.style.width = `${Math.round(state.walkSim.progress * 100)}%`;
+      }
+    }
+
+    /* ------------------------------------------------------------------------
+       J. INDOOR FLOOR PLAN VIEWER & QR CHECKPOINT SIMULATOR
+       ------------------------------------------------------------------------ */
+    function renderIndoorViewer() {
+      const b = KIU_BUILDINGS.find(item => item.id === state.selectedBuildingId) || KIU_BUILDINGS[2];
+      document.getElementById('indoor-building-title').textContent = b.name;
+      document.getElementById('indoor-building-select').value = b.id;
+
+      // Render floor pills
+      const floorBtns = document.getElementById('floor-selector-buttons');
+      floorBtns.innerHTML = b.floors.map(fl => {
+        const active = fl === state.selectedFloor;
+        const label = fl === 'G' ? 'Ground (G)' : fl;
+        return `
+          <button
+            type="button"
+            onclick="selectIndoorFloor('${fl}')"
+            class="min-h-[40px] px-3.5 rounded-xl text-xs font-extrabold transition ${
+              active
+                ? 'bg-kiu-maroon text-white shadow-sm ring-2 ring-kiu-gold/50'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }"
+          >${label}</button>
+        `;
+      }).join('');
+
+      // Filter rooms on active floor
+      const floorRooms = b.rooms.filter(r => r.floor === state.selectedFloor);
+
+      // Build clean architectural SVG Floor Plan
+      const svgWrapper = document.getElementById('indoor-svg-wrapper');
+      const roomRects = floorRooms.map(r => {
+        const rx = 20 + (r.grid.x - 1) * 44;
+        const ry = 22 + (r.grid.y - 1) * 48;
+        const rw = r.grid.w * 42;
+        const rh = r.grid.h * 44;
+        const isTarget = r.id === state.selectedRoomId;
+        const fill = isTarget ? '#7A1C1C' : '#F8FAFC';
+        const stroke = isTarget ? '#D99B26' : '#94A3B8';
+        const textFill = isTarget ? '#FFFFFF' : '#0F172A';
+
+        return `
+          <g class="cursor-pointer" onclick="highlightRoom('${b.id}', '${r.id}')">
+            <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${isTarget ? 2.5 : 1.5}" />
+            <text x="${rx + rw / 2}" y="${ry + rh / 2 - 4}" text-anchor="middle" fill="${textFill}" font-size="10" font-weight="800" font-family="Inter, sans-serif">${r.code}</text>
+            <text x="${rx + rw / 2}" y="${ry + rh / 2 + 10}" text-anchor="middle" fill="${isTarget ? '#FDE68A' : '#475569'}" font-size="8.5" font-weight="600" font-family="Inter, sans-serif">${r.name.slice(0, 20)}${r.name.length > 20 ? '…' : ''}</text>
+          </g>
+        `;
+      }).join('');
+
+      const hasLiftOrRamp = b.isAccessible && (state.selectedFloor === 'G' || b.id === 'MAIN-LIB');
+
+      svgWrapper.innerHTML = `
+        <svg viewBox="0 0 420 205" class="w-full h-auto block" role="img" aria-label="${b.name} ${state.selectedFloor} Floor Plan">
+          <!-- Outer Building Shell -->
+          <rect x="8" y="8" width="404" height="189" rx="14" fill="#F1F5F9" stroke="#334155" stroke-width="2.5" />
+          <!-- Central Main Corridor -->
+          <rect x="18" y="122" width="384" height="32" rx="6" fill="#E2E8F0" />
+          <text x="210" y="142" text-anchor="middle" fill="#64748B" font-size="9.5" font-weight="700" letter-spacing="1.5" font-family="Inter, sans-serif">MAIN CORRIDOR — FLOOR ${state.selectedFloor}</text>
+
+          <!-- Rooms -->
+          ${roomRects}
+
+          <!-- Stairwell Core -->
+          <rect x="24" y="160" width="96" height="28" rx="6" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5" />
+          <text x="72" y="178" text-anchor="middle" fill="#92400E" font-size="9.5" font-weight="800" font-family="Inter, sans-serif">🪜 STAIRWELL</text>
+
+          <!-- Accessible Ramp / Lift Core -->
+          <rect x="282" y="160" width="114" height="28" rx="6" fill="${hasLiftOrRamp ? '#D1FAE5' : '#E2E8F0'}" stroke="${hasLiftOrRamp ? '#059669' : '#94A3B8'}" stroke-width="1.5" />
+          <text x="339" y="178" text-anchor="middle" fill="${hasLiftOrRamp ? '#065F46' : '#64748B'}" font-size="9.5" font-weight="800" font-family="Inter, sans-serif">${hasLiftOrRamp ? '♿ RAMP / LIFT' : 'STAIR ACCESS ONLY'}</text>
+
+          <!-- Main Entrance Marker on Ground Floor -->
+          ${state.selectedFloor === 'G' ? `
+            <rect x="155" y="185" width="110" height="16" rx="4" fill="#7A1C1C" />
+            <text x="210" y="196" text-anchor="middle" fill="#FFFFFF" font-size="8.5" font-weight="800" font-family="Inter, sans-serif">MAIN ENTRANCE</text>
+          ` : ''}
+        </svg>
+      `;
+
+      // Render interactive room list below SVG
+      const roomsList = document.getElementById('indoor-floor-rooms-list');
+      roomsList.innerHTML = floorRooms.map(r => {
+        const isTarget = r.id === state.selectedRoomId;
+        const isFav = isFavoriteItem('room', r.id);
+        return `
+          <div class="rounded-xl border ${isTarget ? 'border-kiu-maroon bg-red-50/60' : 'border-slate-200 bg-white'} p-3 flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1" onclick="highlightRoom('${b.id}', '${r.id}')">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-extrabold">${r.code}</span>
+                <span class="text-xs font-extrabold text-slate-900">${r.name}</span>
+                ${r.accessible ? '<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">♿ Step-Free</span>' : ''}
+              </div>
+              <p class="text-[11px] text-slate-600 mt-1">${r.desc}</p>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onclick="toggleFavorite({ type: 'room', id: '${r.id}', buildingId: '${b.id}', title: '${r.code}: ${r.name.replace(/'/g, "\\'")}', subtitle: '${b.shortName} • Floor ${r.floor}' })"
+                aria-label="Bookmark Room"
+                class="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-sm ${isFav ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-slate-700'}"
+              >${isFav ? '★' : '☆'}</button>
+              <button
+                type="button"
+                onclick="navigateToBuilding('${b.id}', '${r.id}')"
+                class="min-h-[36px] px-2.5 rounded-lg bg-kiu-maroon text-white text-[11px] font-bold hover:bg-kiu-maroonDark"
+              >Go</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectIndoorFloor(floor) {
+      state.selectedFloor = floor;
+      renderIndoorViewer();
+    }
+
+    function highlightRoom(buildingId, roomId) {
+      state.selectedBuildingId = buildingId;
+      state.selectedRoomId = roomId;
+      renderIndoorViewer();
+      playChime(520);
+    }
+
+    /* QR Floor Checkpoint Modal Functions */
+    function openQrModal() {
+      const modal = document.getElementById('qr-modal');
+      modal.classList.remove('hidden');
+
+      const grid = document.getElementById('qr-plaques-grid');
+      grid.innerHTML = QR_PLAQUES.map(p => `
+        <button
+          type="button"
+          onclick="applyQrCheckpoint('${p.id}')"
+          class="text-left p-2.5 rounded-xl border border-slate-200 hover:border-kiu-maroon hover:bg-red-50/50 transition flex items-start gap-2.5"
+        >
+          <span class="w-8 h-8 rounded-lg bg-kiu-maroon/10 text-kiu-maroon flex items-center justify-center font-black text-xs shrink-0">QR</span>
+          <div class="min-w-0">
+            <p class="text-xs font-extrabold text-slate-900 truncate">${p.label}</p>
+            <p class="text-[10px] text-slate-500 truncate">${p.desc}</p>
+          </div>
+        </button>
+      `).join('');
+
+      // Attempt live camera stream if supported
+      const video = document.getElementById('qr-video');
+      const fallback = document.getElementById('qr-camera-fallback');
+      const statusText = document.getElementById('qr-camera-status');
+
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then(stream => {
+            qrStream = stream;
+            video.srcObject = stream;
+            video.classList.remove('hidden');
+            fallback.classList.add('hidden');
+          })
+          .catch(() => {
+            video.classList.add('hidden');
+            fallback.classList.remove('hidden');
+            statusText.textContent = 'Camera preview unavailable — tap a campus QR plaque below';
+          });
+      } else {
+        statusText.textContent = 'Select any campus QR plaque below to snap your floor';
+      }
+    }
+
+    function closeQrModal() {
+      document.getElementById('qr-modal').classList.add('hidden');
+      if (qrStream) {
+        qrStream.getTracks().forEach(track => track.stop());
+        qrStream = null;
+      }
+    }
+
+    function applyQrCheckpoint(plaqueId) {
+      const plaque = QR_PLAQUES.find(p => p.id === plaqueId);
+      if (!plaque) return;
+      const b = KIU_BUILDINGS.find(item => item.id === plaque.buildingId);
+      if (!b) return;
+
+      closeQrModal();
+      setOriginByBuildingId(b.id);
+      state.originLabel = `${b.shortName} (Floor ${plaque.floor} QR Checkpoint)`;
+      document.getElementById('current-origin-label').textContent = state.originLabel;
+
+      selectBuilding(b.id, { roomId: plaque.roomId, switchToIndoor: true, flyTo: true, openMobileHalf: true });
+      playChime(740);
+      showToast(`QR Verified: Snapped to ${b.shortName} — Floor ${plaque.floor}`, '✅');
+    }
+
+    /* ------------------------------------------------------------------------
+       K. OFFLINE SMART CAMPUS GUIDE ("ASK KIU GUIDE") & FAVORITES
+       ------------------------------------------------------------------------ */
+    function initSmartGuide() {
+      const chipsContainer = document.getElementById('guide-quick-questions');
+      chipsContainer.innerHTML = GUIDE_QA_TOPICS.map((t, idx) => `
+        <button
+          type="button"
+          onclick="askGuideTopic(${idx})"
+          class="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-kiu-maroon hover:text-white text-slate-700 text-[11px] font-semibold transition text-left"
+        >${t.question}</button>
+      `).join('');
+
+      // Show initial helpful greeting card
+      renderGuideAnswer(
+        'Welcome to KIU Main Campus! 👋',
+        'Ask me where to complete ICT & Finance clearance, locate lecture theatres and labs (like IBR Lab 2 or CIT Labs), find wheelchair-accessible washrooms, or reach the Main Library.',
+        'MAIN-LIB',
+        'LIB-G01'
+      );
+    }
+
+    function askGuideTopic(index) {
+      const topic = GUIDE_QA_TOPICS[index];
+      if (!topic) return;
+      document.getElementById('guide-query-input').value = topic.question;
+      renderGuideAnswer(topic.question, topic.answer, topic.primaryBuildingId, topic.primaryRoomId, topic.secondaryBuildingId);
+    }
+
+    function handleGuideSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('guide-query-input');
+      const query = input.value.trim();
+      if (!query) return;
+
+      const qLower = query.toLowerCase();
+
+      // 1. Score curated student Q&A topics
+      let bestTopic = null;
+      let bestScore = 0;
+      GUIDE_QA_TOPICS.forEach(t => {
+        let score = 0;
+        t.keywords.forEach(kw => {
+          if (qLower.includes(kw)) score += 2;
+        });
+        if (score > bestScore) {
+          bestScore = score;
+          bestTopic = t;
+        }
+      });
+
+      if (bestTopic && bestScore >= 2) {
+        renderGuideAnswer(query, bestTopic.answer, bestTopic.primaryBuildingId, bestTopic.primaryRoomId, bestTopic.secondaryBuildingId);
+        return;
+      }
+
+      // 2. Fallback direct room/building directory match
+      for (const b of KIU_BUILDINGS) {
+        for (const r of b.rooms) {
+          if (qLower.includes(r.code.toLowerCase()) || qLower.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(qLower)) {
+            renderGuideAnswer(
+              query,
+              `**${r.name} (${r.code})** is located on **Floor ${r.floor}** of the **${b.name}**. ${r.desc}`,
+              b.id,
+              r.id
+            );
+            return;
+          }
+        }
+        if (qLower.includes(b.shortName.toLowerCase()) || b.name.toLowerCase().includes(qLower)) {
+          renderGuideAnswer(query, `${b.name}: ${b.description} (${b.hours})`, b.id, b.rooms[0]?.id);
+          return;
+        }
+      }
+
+      // 3. Helpful fallback
+      renderGuideAnswer(
+        query,
+        'For general admissions, registration, or campus inquiries, visit the **Admissions & Student Inquiries Desk (ADM-G01)** on the Ground Floor of the **Central Administration Block** right inside the Main Gate.',
+        'ADMIN-BLK',
+        'ADM-G01'
+      );
+    }
+
+    function renderGuideAnswer(questionTitle, markdownText, primaryBuildingId, primaryRoomId, secondaryBuildingId = null) {
+      const feed = document.getElementById('guide-responses');
+      const formatted = markdownText.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-900 font-extrabold">$1</strong>');
+      const primaryB = KIU_BUILDINGS.find(b => b.id === primaryBuildingId);
+      const secondaryB = secondaryBuildingId ? KIU_BUILDINGS.find(b => b.id === secondaryBuildingId) : null;
+
+      feed.innerHTML = `
+        <div class="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm space-y-2.5">
+          <div class="flex items-center gap-1.5 text-[11px] font-bold text-kiu-maroon">
+            <span>💬</span>
+            <span>${questionTitle}</span>
+          </div>
+          <p class="text-xs text-slate-700 leading-relaxed">${formatted}</p>
+          <div class="flex flex-wrap gap-2 pt-1">
+            ${primaryB ? `
+              <button
+                type="button"
+                onclick="navigateToBuilding('${primaryB.id}', '${primaryRoomId || ''}')"
+                class="min-h-[38px] px-3 rounded-xl bg-kiu-maroon text-white text-xs font-bold hover:bg-kiu-maroonDark transition"
+              >🧭 Navigate to ${primaryB.shortName}</button>
+            ` : ''}
+            ${secondaryB ? `
+              <button
+                type="button"
+                onclick="navigateToBuilding('${secondaryB.id}')"
+                class="min-h-[38px] px-3 rounded-xl bg-slate-100 text-slate-800 text-xs font-bold hover:bg-slate-200 transition"
+              >Then → ${secondaryB.shortName}</button>
+            ` : ''}
+            ${primaryB ? `
+              <button
+                type="button"
+                onclick="selectBuilding('${primaryB.id}', { roomId: '${primaryRoomId || ''}', switchToIndoor: true })"
+                class="min-h-[38px] px-3 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition"
+              >🏢 Floor Plan</button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    /* Favorites Persistence in localStorage */
+    function loadFavorites() {
+      try {
+        const raw = localStorage.getItem('kiu_navigator_favorites_v1');
+        if (raw) state.favorites = JSON.parse(raw);
+      } catch (e) {
+        state.favorites = [];
+      }
+      renderSavedList();
+    }
+
+    function saveFavorites() {
+      try {
+        localStorage.setItem('kiu_navigator_favorites_v1', JSON.stringify(state.favorites));
+      } catch (e) {
+        // Ignore storage quota errors
+      }
+      renderSavedList();
+    }
+
+    function isFavoriteItem(type, id) {
+      return state.favorites.some(f => f.type === type && f.id === id);
+    }
+
+    function toggleFavorite(item) {
+      const idx = state.favorites.findIndex(f => f.type === item.type && f.id === item.id);
+      if (idx >= 0) {
+        state.favorites.splice(idx, 1);
+        showToast(`Removed "${item.title}" from Saved`, '☆');
+      } else {
+        state.favorites.unshift(item);
+        showToast(`Bookmarked "${item.title}"`, '★');
+      }
+      saveFavorites();
+      renderDirectory();
+      renderSelectedBuildingCard();
+      renderIndoorViewer();
+    }
+
+    function renderSavedList() {
+      const list = document.getElementById('saved-list');
+      const badge = document.getElementById('saved-count-badge');
+      badge.textContent = `${state.favorites.length} Saved`;
+
+      if (state.favorites.length === 0) {
+        list.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-slate-300 p-6 text-center">
+            <p class="text-sm font-bold text-slate-700">No bookmarked rooms yet</p>
+            <p class="text-xs text-slate-500 mt-1">Tap the ☆ star icon on any KIU lecture hall, lab, or office to save it offline for quick access.</p>
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = state.favorites.map(f => `
+        <div class="rounded-xl border border-slate-200 bg-white p-3 flex items-center justify-between gap-2 shadow-sm">
+          <div class="min-w-0">
+            <p class="text-xs font-extrabold text-slate-900 truncate">${f.title}</p>
+            <p class="text-[11px] text-slate-500 truncate">${f.subtitle}</p>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onclick="navigateToBuilding('${f.buildingId}', '${f.type === 'room' ? f.id : ''}')"
+              class="min-h-[36px] px-3 rounded-lg bg-kiu-maroon text-white text-xs font-bold"
+            >Navigate</button>
+            <button
+              type="button"
+              onclick="toggleFavorite({ type: '${f.type}', id: '${f.id}', buildingId: '${f.buildingId}', title: '${f.title.replace(/'/g, "\\'")}', subtitle: '${f.subtitle.replace(/'/g, "\\'")}' })"
+              aria-label="Remove Favorite"
+              class="w-9 h-9 rounded-lg bg-slate-100 text-slate-500 hover:text-red-600 text-xs font-bold"
+            >✕</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    /* ------------------------------------------------------------------------
+       L. UI RENDERERS (TABS, DIRECTORY, SELECTED CARD, ROUTE PANEL, MOBILE SHEET)
+       ------------------------------------------------------------------------ */
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+      const tabs = ['explore', 'route', 'indoor', 'guide', 'saved'];
+      tabs.forEach(t => {
+        const panel = document.getElementById(`panel-${t}`);
+        if (panel) panel.classList.toggle('hidden', t !== tabId);
+      });
+
+      document.querySelectorAll('.nav-tab').forEach(btn => {
+        const isActive = btn.dataset.tab === tabId;
+        btn.className = `nav-tab min-h-[44px] flex flex-col items-center justify-center text-[11px] transition ${
+          isActive
+            ? 'font-extrabold text-kiu-maroon border-b-2 border-kiu-maroon bg-white'
+            : 'font-semibold text-slate-500 border-b-2 border-transparent hover:text-slate-800'
+        }`;
+      });
+    }
+
+    function renderCategoryChips() {
+      const html = CATEGORIES.map(c => {
+        const active = c.id === state.activeCategory;
+        return `
+          <button
+            type="button"
+            onclick="setCategoryFilter('${c.id}')"
+            class="min-h-[32px] px-3 rounded-full text-[11px] font-bold whitespace-nowrap transition ${
+              active
+                ? 'bg-kiu-gold text-slate-950 shadow-sm'
+                : 'bg-slate-200/80 md:bg-white/15 text-slate-700 md:text-white hover:bg-slate-300 md:hover:bg-white/25'
+            }"
+          >${c.label}</button>
+        `;
+      }).join('');
+
+      document.getElementById('mobile-category-chips').innerHTML = html;
+      document.getElementById('desktop-category-chips').innerHTML = html;
+    }
+
+    function setCategoryFilter(catId) {
+      state.activeCategory = catId;
+      renderCategoryChips();
+      renderDirectory();
+      switchTab('explore');
+    }
+
+    function populateBuildingDropdowns() {
+      const optionsHtml = KIU_BUILDINGS.map(b => `<option value="${b.id}">${b.shortName} (${b.code})</option>`).join('');
+      document.getElementById('quick-origin-select').innerHTML = optionsHtml;
+      document.getElementById('route-origin-select').innerHTML = optionsHtml;
+      document.getElementById('route-dest-select').innerHTML = optionsHtml;
+      document.getElementById('indoor-building-select').innerHTML = optionsHtml;
+
+      document.getElementById('quick-origin-select').value = state.originBuildingId;
+      document.getElementById('route-origin-select').value = state.originBuildingId;
+      document.getElementById('route-dest-select').value = state.selectedBuildingId;
+      document.getElementById('indoor-building-select').value = state.selectedBuildingId;
+    }
+
+    function renderSelectedBuildingCard() {
+      const container = document.getElementById('selected-building-card');
+      const b = KIU_BUILDINGS.find(item => item.id === state.selectedBuildingId);
+      if (!b) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+      const isFav = isFavoriteItem('building', b.id);
+
+      container.innerHTML = `
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="px-2 py-0.5 rounded-md bg-kiu-maroon text-white text-[10px] font-extrabold tracking-wider">${b.code}</span>
+              <span class="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 text-[10px] font-bold">${b.category}</span>
+              <span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">♿ Accessible</span>
+            </div>
+            <h3 class="text-sm font-extrabold text-slate-900 mt-1.5 leading-snug">${b.name}</h3>
+          </div>
+          <button
+            type="button"
+            onclick="toggleFavorite({ type: 'building', id: '${b.id}', buildingId: '${b.id}', title: '${b.name.replace(/'/g, "\\'")}', subtitle: '${b.floors.length} Floor(s) • ${b.category}' })"
+            aria-label="Bookmark Building"
+            class="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-base shrink-0 ${isFav ? 'text-amber-500' : 'text-slate-400'}"
+          >${isFav ? '★' : '☆'}</button>
+        </div>
+
+        <p class="text-xs text-slate-600 mt-1.5 leading-relaxed">${b.description}</p>
+        <p class="text-[11px] font-semibold text-emerald-700 mt-1.5">♿ ${b.accessibilityNote}</p>
+        <p class="text-[11px] text-slate-500 mt-0.5">🕒 ${b.hours}</p>
+
+        <div class="grid grid-cols-3 gap-1.5 mt-3">
+          <button
+            type="button"
+            onclick="navigateToBuilding('${b.id}')"
+            class="min-h-[42px] px-2 rounded-xl bg-kiu-maroon text-white text-xs font-extrabold shadow-sm hover:bg-kiu-maroonDark transition flex items-center justify-center gap-1"
+          >🧭 Navigate</button>
+          <button
+            type="button"
+            onclick="selectBuilding('${b.id}', { switchToIndoor: true })"
+            class="min-h-[42px] px-2 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 transition flex items-center justify-center gap-1"
+          >🏢 Floors (${b.floors.length})</button>
+          <button
+            type="button"
+            onclick="setOriginByBuildingId('${b.id}')"
+            class="min-h-[42px] px-2 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 transition flex items-center justify-center gap-1"
+          >📍 Set Start</button>
+        </div>
+      `;
+    }
+
+    function renderDirectory() {
+      const q = state.searchQuery.trim().toLowerCase();
+      const cat = state.activeCategory;
+      const listEl = document.getElementById('directory-list');
+      const headingEl = document.getElementById('directory-heading');
+
+      // Filter buildings and rooms matching search/category
+      const matchedBlocks = [];
+      const matchedRooms = [];
+
+      KIU_BUILDINGS.forEach(b => {
+        const catMatchesBuilding = cat === 'All' || b.category === cat;
+        const textMatchesBuilding = !q ||
+          b.name.toLowerCase().includes(q) ||
+          b.shortName.toLowerCase().includes(q) ||
+          b.code.toLowerCase().includes(q) ||
+          b.description.toLowerCase().includes(q);
+
+        if (catMatchesBuilding && textMatchesBuilding) {
+          matchedBlocks.push(b);
+        }
+
+        b.rooms.forEach(r => {
+          const catMatchesRoom = cat === 'All' || r.category === cat || b.category === cat;
+          const textMatchesRoom = !q ||
+            r.name.toLowerCase().includes(q) ||
+            r.code.toLowerCase().includes(q) ||
+            r.desc.toLowerCase().includes(q);
+
+          if ((q || cat !== 'All') && catMatchesRoom && textMatchesRoom) {
+            matchedRooms.push({ building: b, room: r });
+          }
+        });
+      });
+
+      headingEl.textContent = q
+        ? `Search Results (${matchedBlocks.length} Buildings, ${matchedRooms.length} Rooms)`
+        : `${cat === 'All' ? 'All Campus Buildings' : cat} (${matchedBlocks.length})`;
+
+      let html = '';
+
+      // Render matched specific rooms first when searching
+      if (q && matchedRooms.length > 0) {
+        html += `<div class="space-y-1.5 mb-3">`;
+        matchedRooms.slice(0, 8).forEach(({ building, room }) => {
+          html += `
+            <div class="rounded-xl border border-kiu-gold/50 bg-amber-50/40 p-2.5 flex items-center justify-between gap-2">
+              <div class="min-w-0 cursor-pointer" onclick="selectBuilding('${building.id}', { roomId: '${room.id}', switchToIndoor: true, flyTo: true })">
+                <div class="flex items-center gap-1.5">
+                  <span class="px-1.5 py-0.5 rounded bg-kiu-maroon text-white text-[10px] font-extrabold">${room.code}</span>
+                  <span class="text-xs font-extrabold text-slate-900 truncate">${room.name}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 truncate mt-0.5">${building.shortName} • Floor ${room.floor}</p>
+              </div>
+              <button
+                type="button"
+                onclick="navigateToBuilding('${building.id}', '${room.id}')"
+                class="min-h-[36px] px-3 rounded-lg bg-kiu-maroon text-white text-xs font-bold shrink-0"
+              >Go</button>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // Render buildings
+      matchedBlocks.forEach(b => {
+        const isSel = b.id === state.selectedBuildingId;
+        html += `
+          <article
+            onclick="selectBuilding('${b.id}', { flyTo: true })"
+            class="rounded-2xl border ${isSel ? 'border-kiu-maroon bg-red-50/30' : 'border-slate-200 bg-white hover:border-slate-300'} p-3 cursor-pointer transition shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-extrabold">${b.code}</span>
+                  <span class="text-[11px] font-semibold text-slate-500">${b.category} • ${b.floors.length} Floor${b.floors.length > 1 ? 's' : ''}</span>
+                </div>
+                <h3 class="text-xs font-extrabold text-slate-900 mt-1">${b.name}</h3>
+                <p class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">${b.rooms.map(r => r.code).join(' • ')}</p>
+              </div>
+              <button
+                type="button"
+                onclick="event.stopPropagation(); navigateToBuilding('${b.id}')"
+                class="min-h-[38px] px-3 rounded-xl bg-kiu-maroon/10 hover:bg-kiu-maroon text-kiu-maroon hover:text-white text-xs font-extrabold transition shrink-0"
+              >Route</button>
+            </div>
+          </article>
+        `;
+      });
+
+      if (!html) {
+        html = `
+          <div class="rounded-2xl border border-dashed border-slate-300 p-6 text-center">
+            <p class="text-sm font-bold text-slate-700">No matching campus locations</p>
+            <p class="text-xs text-slate-500 mt-1">Try searching for "IBR Lab 2", "Library", "Registrar", "ICT", or "Hostels".</p>
+          </div>
+        `;
+      }
+
+      listEl.innerHTML = html;
+    }
+
+    function renderRoutePanel() {
+      const container = document.getElementById('route-summary-container');
+      const destBuilding = KIU_BUILDINGS.find(b => b.id === state.selectedBuildingId);
+      const targetRoom = destBuilding && state.selectedRoomId
+        ? destBuilding.rooms.find(r => r.id === state.selectedRoomId)
+        : null;
+
+      if (!state.activeRoute || !destBuilding) {
+        container.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-slate-300 p-5 text-center">
+            <p class="text-xs font-bold text-slate-700">Select a destination to calculate your KIU walking route.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const r = state.activeRoute;
+      const roomBanner = targetRoom
+        ? `<div class="mt-2 px-2.5 py-1.5 rounded-lg bg-amber-100/80 border border-amber-300 text-[11px] font-bold text-amber-950">
+             🎯 Final Indoor Room: ${targetRoom.code} — ${targetRoom.name} (Floor ${targetRoom.floor})
+           </div>`
+        : '';
+
+      const stepsHtml = r.steps.map((s, idx) => {
+        const badgeIcon = s.type === 'arrive' ? '🏁' : s.type === 'stairs' ? '🪜' : s.type === 'ramp' ? '♿' : '🚶';
+        return `
+          <div class="flex items-start gap-2.5 p-2.5 rounded-xl bg-white border border-slate-200/90">
+            <span class="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-sm shrink-0">${badgeIcon}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-semibold text-slate-800 leading-snug">${idx + 1}. ${s.instruction}</p>
+              ${s.distance > 0 ? `<span class="text-[10px] font-bold text-slate-400">${s.distance} meters</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-3.5 shadow-md">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-kiu-goldLight">
+                ${r.stepFreeUsed ? '♿ Step-Free Accessible Route' : '⚡ Fastest Pedestrian Route'}
+              </span>
+              <h3 class="text-sm font-extrabold mt-0.5">${destBuilding.shortName}</h3>
+            </div>
+            <div class="text-right">
+              <p class="text-lg font-black text-kiu-goldLight leading-none">${r.etaMinutes} min</p>
+              <p class="text-[11px] font-semibold text-slate-300 mt-0.5">${r.totalMeters} meters</p>
+            </div>
+          </div>
+
+          ${roomBanner}
+
+          <!-- Simulate Walk Controls -->
+          <div class="mt-3 pt-2.5 border-t border-white/15 flex items-center gap-2">
+            <button
+              type="button"
+              onclick="toggleWalkSimulation()"
+              class="flex-1 min-h-[40px] px-3 rounded-xl ${state.walkSim.active ? 'bg-amber-500 text-slate-950' : 'bg-kiu-gold text-slate-950'} text-xs font-extrabold flex items-center justify-center gap-1.5 shadow transition"
+            >
+              <span>${state.walkSim.active ? '⏹ Stop Simulation' : '▶️ Simulate Walk'}</span>
+            </button>
+            <button
+              type="button"
+              onclick="selectBuilding('${destBuilding.id}', { switchToIndoor: true })"
+              class="min-h-[40px] px-3 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition"
+            >Floor Plan</button>
+          </div>
+
+          ${state.walkSim.active ? `
+            <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mt-2.5">
+              <div id="walk-sim-progress-bar" class="h-full bg-kiu-goldLight transition-all duration-100" style="width: 0%"></div>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="space-y-1.5 mt-3">
+          <h4 class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Turn-by-Turn Pedestrian Steps</h4>
+          ${stepsHtml}
+        </div>
+      `;
+    }
+
+    /* Mobile 3-State Drawer Touch Dragging & State Cycling */
+    function setSheetState(newState) {
+      state.sheetState = newState;
+      const panel = document.getElementById('control-panel');
+      panel.classList.remove('sheet-collapsed', 'sheet-half', 'sheet-expanded');
+      panel.classList.add(`sheet-${newState}`);
+    }
+
+    function cycleSheetState() {
+      const order = ['collapsed', 'half', 'expanded'];
+      const next = order[(order.indexOf(state.sheetState) + 1) % order.length];
+      setSheetState(next);
+    }
+
+    function updateMobileSheetSummary() {
+      const summaryEl = document.getElementById('mobile-sheet-summary');
+      if (!summaryEl) return;
+      const dest = KIU_BUILDINGS.find(b => b.id === state.selectedBuildingId);
+      if (state.activeRoute && dest) {
+        summaryEl.innerHTML = `
+          <p class="text-xs font-extrabold text-kiu-maroon truncate">🧭 To ${dest.shortName} • ${state.activeRoute.etaMinutes} min (${state.activeRoute.totalMeters} m)</p>
+          <p class="text-[11px] text-slate-500 truncate">${state.activeRoute.stepFreeUsed ? '♿ Step-Free Ramp Route' : 'Tap Full for turn-by-turn steps'}</p>
+        `;
+      } else {
+        summaryEl.innerHTML = `
+          <p class="text-xs font-extrabold text-kiu-maroon truncate">KIU Main Campus — Kansanga</p>
+          <p class="text-[11px] text-slate-500 truncate">9 Buildings • 28 Rooms • Offline Ready</p>
+        `;
+      }
+    }
+
+    function initMobileSheetGestures() {
+      const dragZone = document.getElementById('sheet-drag-zone');
+      const panel = document.getElementById('control-panel');
+      if (!dragZone || !panel) return;
+
+      let startY = 0;
+      let deltaY = 0;
+
+      dragZone.addEventListener('touchstart', (e) => {
+        if (window.innerWidth >= 768) return;
+        startY = e.touches[0].clientY;
+        deltaY = 0;
+        panel.classList.add('sheet-dragging');
+      }, { passive: true });
+
+      dragZone.addEventListener('touchmove', (e) => {
+        if (window.innerWidth >= 768) return;
+        deltaY = e.touches[0].clientY - startY;
+      }, { passive: true });
+
+      dragZone.addEventListener('touchend', () => {
+        if (window.innerWidth >= 768) return;
+        panel.classList.remove('sheet-dragging');
+        if (Math.abs(deltaY) < 25) return;
+
+        if (deltaY < -35) {
+          // Swiped up
+          setSheetState(state.sheetState === 'collapsed' ? 'half' : 'expanded');
+        } else if (deltaY > 35) {
+          // Swiped down
+          setSheetState(state.sheetState === 'expanded' ? 'half' : 'collapsed');
+        }
+      });
+    }
+
+    /* Synchronized Search Inputs (Mobile + Desktop) */
+    function initSearchBindings() {
+      const mobInput = document.getElementById('mobile-search-input');
+      const deskInput = document.getElementById('desktop-search-input');
+      const mobClear = document.getElementById('mobile-clear-search');
+      const deskClear = document.getElementById('desktop-clear-search');
+
+      function onSearchChange(val) {
+        state.searchQuery = val;
+        if (mobInput.value !== val) mobInput.value = val;
+        if (deskInput.value !== val) deskInput.value = val;
+
+        mobClear.classList.toggle('hidden', !val);
+        deskClear.classList.toggle('hidden', !val);
+
+        switchTab('explore');
+        renderDirectory();
+        if (val && window.innerWidth < 768 && state.sheetState === 'collapsed') {
+          setSheetState('half');
+        }
+      }
+
+      mobInput.addEventListener('input', (e) => onSearchChange(e.target.value));
+      deskInput.addEventListener('input', (e) => onSearchChange(e.target.value));
+      mobClear.addEventListener('click', () => onSearchChange(''));
+      deskClear.addEventListener('click', () => onSearchChange(''));
+    }
+
+    /* ------------------------------------------------------------------------
+       M. APPLICATION BOOTSTRAP ON WINDOW LOAD
+       ------------------------------------------------------------------------ */
+    window.addEventListener('load', () => {
+      populateBuildingDropdowns();
+      renderCategoryChips();
+      renderSelectedBuildingCard();
+      renderDirectory();
+      renderIndoorViewer();
+      initSmartGuide();
+      loadFavorites();
+      initSearchBindings();
+      initMobileSheetGestures();
+      initSchematicCanvasInteractions();
+
+      // Compute default introductory route (Main Gate -> Main Library)
+      state.activeRoute = computePedestrianRoute('N_GATE', 'N_LIB', false);
+      renderRoutePanel();
+      updateMobileSheetSummary();
+
+      // Initialize 3D Vector Map + Offline Schematic Canvas
+      initMapLibre();
+      renderSchematicCanvas();
+
+      window.addEventListener('resize', () => {
+        renderSchematicCanvas();
+        if (mapInstance) mapInstance.resize();
+      });
+    });
+  </script>
+</body>
+</html>
